@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.71
+script_version = 7.72
 util.require_natives("1640181023")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -3678,22 +3678,6 @@ function set_up_player_actions(pid)
             end
     end)
 
-    
-    menu.action(chattrolls_root, translations.invisible_spoof_chat, {translations.invisible_spoof_chat_cmd}, translations.invisible_spoof_chat_desc, function(click_type)
-        util.toast(translations.schizo_pls_input)
-        menu.show_command_box(translations.invisible_spoof_chat_cmd .. PLAYER.GET_PLAYER_NAME(pid) .. " ")
-    end, function(on_command)
-        if #on_command > 140 then
-            util.toast(translations.chat_too_long)
-        else
-            for k,iter_pid in pairs(players.list(true, true, true)) do
-                if iter_pid ~= pid then
-                    chat.send_targeted_message(iter_pid, pid, on_command, false)
-                end
-            end
-        end
-    end)
-
     menu.action(chattrolls_root, translations.fake_rac_detection_chat, {translations.fake_rac_detection_chat_cmd}, translations.fake_rac_detection_chat_desc, function(click_type)
         local types = {'C1', 'I3', 'I1', 'N3', 'D3', 'S3'}
         local det_type = types[math.random(1, #types)]
@@ -3842,22 +3826,6 @@ noarmedvehs = false
 menu.toggle(ap_root, translations.delete_armed_vehicles, {translations.delete_armed_vehicles_cmd}, translations.delete_armed_vehicles_desc, function(on)
     noarmedvehs = on
     mod_uses("player", if on then 1 else -1)
-end)
-
-
-menu.action(aphostile_root, translations.mass_spoof_chat, {translations.mass_spoof_chat}, translations.mass_spoof_chat_desc, function(click_type)
-    util.toast(translations.mass_chat_input)
-    menu.show_command_box(translations.mass_spoof_chat_cmd .. " ")
-end, function(on_command)
-    if #on_command > 140 then
-        util.toast(translations.chat_too_long)
-    else
-        for k,pid1 in pairs(players.list(false, true, true)) do
-            for k,pid2 in pairs(players.list(true, true, true)) do
-                chat.send_targeted_message(pid2, pid1, on_command, false)
-            end
-        end
-    end
 end)
 
 local text_options = {translations.nudes, translations.random_texts}
