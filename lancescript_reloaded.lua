@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.72
+script_version = 7.74
 util.require_natives("1640181023")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -419,9 +419,49 @@ menu.toggle(protections_root, translations.friendtect, {translations.friendtect_
     friendtect = on
 end)
 
+admin_bail = true
+menu.toggle(protections_root, translations.admin_bail, {translations.admin_bail_cmd}, translations.admin_bail_desc, function(on)
+    admin_bail = on
+end, true)
+
+function get_random_joke()
+    local joke = 'WIP'
+    local in_progress = true
+    async_http.init('icanhazdadjoke.com', '', function(data)
+        joke = data
+    end, function()
+        joke = 'FAIL'
+    end)
+    async_http.add_header('Accept', 'text/plain')
+    async_http.dispatch()
+    while joke == "WIP" do 
+        util.yield()
+    end
+    return joke
+end
+
 menu.action(chat_presets_root, translations.dox, {}, translations.dox_desc, function(click_type)
     chat.send_message("${name}: ${ip} | ${geoip.city}, ${geoip.region}, ${geoip.country}", false, true, true)
 end)
+
+menu.action(chat_presets_root, translations.random_joke, {translations.random_joke_cmd}, translations.random_joke_desc, function(click_type)
+    local joke = get_random_joke()
+    if joke ~= "FAIL" then
+        chat.send_message(joke, false, true, true)
+    end
+end)
+
+menu.toggle_loop(chat_presets_root, translations.random_joke_loop, {translations.random_joke_loop_cmd}, translations.random_joke_loop_desc, function(click_type)
+    local joke = get_random_joke()
+    if joke ~= "FAIL" then
+        chat.send_message(joke, false, true, true)
+    end
+    util.yield(5000)
+end)
+
+
+
+--https://icanhazdadjoke.com/
 
 local chat_presets = {
     [translations.chat_preset_1_name] = translations.chat_preset_1_content,
@@ -493,6 +533,56 @@ blue = to_rgb(0.0,0.0,1.0,1.0)
 -- RAYCAST SHIT
 
 -- credits to nowiry
+
+local function get_entity_owner(entity)
+	local pEntity = entities.handle_to_pointer(entity)
+	local addr = memory.read_long(pEntity + 0xD0)
+	return (addr ~= 0) and memory.read_byte(addr + 0x49) or -1
+end
+
+
+function interpolate(y0, y1, perc)
+	perc = perc > 1.0 and 1.0 or perc
+	return (1 - perc) * y0 + perc * y1
+end
+
+
+function get_health_colour(perc)
+	local result = {a = 255}
+	local r, g, b
+	if perc <= 0.5 then
+		r = 1.0
+		g = interpolate(0.0, 1.0, perc/0.5)
+		b = 0.0
+	else
+		r = interpolate(1.0, 0, (perc - 0.5)/0.5)
+		g = 1.0
+		b = 0.0
+	end
+	result.r = math.ceil(r * 255)
+	result.g = math.ceil(g * 255)
+	result.b = math.ceil(b * 255)
+	return result
+end
+
+
+function draw_marker(type, pos, dir, rot, scale, rotate, colour, txdDict, txdName)
+    txdDict = txdDict or 0
+    txdName = txdName or 0
+    colour = colour or {r = 255, g = 255, b = 255, a = 255}
+    GRAPHICS.DRAW_MARKER(type, pos.x, pos.y, pos.z, dir.x, dir.y, dir.z, rot.x, rot.y, rot.z, scale.x, scale.y, scale.z, colour.r, colour.g, colour.b, colour.a, false, true, 2, rotate, txdDict, txdName, false)
+end
+
+
+function get_distance_between_entities(entity, target)
+	if not ENTITY.DOES_ENTITY_EXIST(entity) or not ENTITY.DOES_ENTITY_EXIST(target) then
+		return 0.0
+	end
+	local pos = ENTITY.GET_ENTITY_COORDS(entity, true)
+	return ENTITY.GET_ENTITY_COORDS(target, true):distance(pos)
+end
+
+
 function get_offset_from_gameplay_camera(distance)
     local cam_rot = CAM.GET_GAMEPLAY_CAM_ROT(0)
     local cam_pos = CAM.GET_GAMEPLAY_CAM_COORD()
@@ -712,6 +802,14 @@ function request_control_of_entity(ent)
     end
 end
 
+function request_control_of_entity_once(ent)
+    if not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(ent) and util.is_session_started() then
+        local netid = NETWORK.NETWORK_GET_NETWORK_ID_FROM_ENTITY(ent)
+        NETWORK.SET_NETWORK_ID_CAN_MIGRATE(netid, true)
+        NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(ent)
+    end
+end
+
 -- model load requesting, very important
 function request_model_load(hash)
     request_time = os.time()
@@ -796,7 +894,7 @@ end, function(on_command)
     end
 end)
 
-menu.toggle(self_root, translations.burning_man, {translations.burning_man_desc_cmd}, translations.burning_man_desc, function(on)
+menu.toggle(self_root, translations.burning_man, {translations.burning_man_cmd}, translations.burning_man_desc, function(on)
     ped_flags[430] = on
     if on then
         FIRE.START_ENTITY_FIRE(players.user_ped())
@@ -1369,7 +1467,7 @@ objects_thread = util.create_thread(function (thr)
             all_objects = entities.get_all_objects_as_handles()
             for k,obj in pairs(all_objects) do
                 if reap then
-                    request_control_of_entity(obj)
+                    request_control_of_entity_once(obj)
                 end
                 --- PROJECTILE SHIT
                 if is_entity_a_projectile(ENTITY.GET_ENTITY_MODEL(obj)) then
@@ -1445,7 +1543,7 @@ peds_thread = util.create_thread(function (thr)
                 end
                 if not PED.IS_PED_A_PLAYER(ped) then
                     if reap then
-                        request_control_of_entity(ped)
+                        request_control_of_entity_once(ped)
                     end
 
                     if ped_no_ragdoll then 
@@ -1515,45 +1613,52 @@ peds_thread = util.create_thread(function (thr)
                         TASK.TASK_COMBAT_PED(ped, players.user_ped(), 0, 16)
                     end
                     if roast_voicelines then
-                        AUDIO.PLAY_PED_AMBIENT_SPEECH_NATIVE(ped, "GENERIC_INSULT_MED", "SPEECH_PARAMS_FORCE_SHOUTED")
+                        local roasts = {
+                            "GENERIC_INSULT_MED",
+                            "GENERIC_INSULT_HIGH"
+                        }
+                        AUDIO.PLAY_PED_AMBIENT_SPEECH_NATIVE(ped, roasts[math.random(#roasts)], "SPEECH_PARAMS_FORCE_SHOUTED")
                     end
     
                     if sex_voicelines then
-                        AUDIO.PLAY_PED_AMBIENT_SPEECH_WITH_VOICE_NATIVE(ped, "SEX_GENERIC_FEM", "S_F_Y_HOOKER_01_WHITE_FULL_01", "SPEECH_PARAMS_FORCE_SHOUTED", 0)
-                    end
-    
-                    if gluck_voicelines then
-                        AUDIO.PLAY_PED_AMBIENT_SPEECH_WITH_VOICE_NATIVE(ped, "SEX_ORAL_FEM", "S_F_Y_HOOKER_01_WHITE_FULL_01", "SPEECH_PARAMS_FORCE_SHOUTED", 0)
+                        local voice_name = all_sex_voicenames[math.random(1, #all_sex_voicenames)]
+                        local speeches = {
+                            "SEX_GENERIC_FEM",
+                            "SEX_HJ",
+                            "SEX_ORAL_FEM",
+                            "SEX_CLIMAX",
+                            "SEX_GENERIC"
+                        }
+                        AUDIO.PLAY_PED_AMBIENT_SPEECH_WITH_VOICE_NATIVE(ped, speeches[math.random(#speeches)], voice_name, "SPEECH_PARAMS_FORCE_SHOUTED", 0)
                     end
     
                     if screamall then
-                        AUDIO.PLAY_PAIN(ped, 7, 0)
+                        local screams = {
+                            "SCREAM_SCARED",
+                            "SCREAM_PANIC_SHORT",
+                            "SCREAM_TERROR"
+
+                        }
+                        AUDIO.PLAY_PED_AMBIENT_SPEECH_NATIVE(ped, screams[math.random(#screams)], "SPEECH_PARAMS_FORCE_SHOUTED")
                     end
 
-                    if php_bars then
-                        local d_coord = ENTITY.GET_ENTITY_COORDS(ped, true)
-                        d_coord['z'] = d_coord['z'] + 0.8
-                        local hp = ENTITY.GET_ENTITY_HEALTH(ped)
-                        local perc = hp/ENTITY.GET_ENTITY_MAX_HEALTH(ped)*100
-                        if perc ~= 0 then
-                            local r = 0
-                            local g = 0
-                            local b = 0
-                            if perc == 100 then
-                                r = 0
-                                g = 255
-                                b = 0
-                            elseif perc < 100 and perc > 50 then
-                                r = 255
-                                g = 255
-                                b = 0
-                            else
-                                r = 255
-                                g = 0
-                                b = 0
-                            end
-                            GRAPHICS.DRAW_MARKER(43, d_coord['x'], d_coord['y'], d_coord['z'], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.10, 0, perc/150, r, g, b, 100, false, true, 2, false, 0, 0, false)
+                    if php_bars and get_distance_between_entities(players.user_ped(), ped) < 100.0 and not PED.IS_PED_FATALLY_INJURED(ped) and ENTITY.IS_ENTITY_ON_SCREEN(ped) then
+                        local headPos = PED.GET_PED_BONE_COORDS(ped, 0x322C --[[head]], 0.35, 0., 0.)
+                        local perc = 0.0
+
+                        if not PED.IS_PED_FATALLY_INJURED(ped) then
+                            local maxHealth = PED.GET_PED_MAX_HEALTH(ped)
+                            local health = ENTITY.GET_ENTITY_HEALTH(ped)
+                            ---Peds die when their health is below the injured threshold
+                            ---which is 100 by default, so we subtract it here so the perc is
+                            ---zero when a ped dies.
+                            perc = (health - 100.0) / (maxHealth - 100.0)
+                            if perc > 1.0 then perc = 1.0  end
                         end
+                        
+                        local colour = get_health_colour(perc)
+                        local scale = v3.new(0.10, 0.0, interpolate(0.0, 0.7, perc))
+                        draw_marker(43, headPos, v3(), v3(), scale, false, colour, 0, 0)
                     end
 
                     if allpeds_gun ~= 0 then
@@ -1825,12 +1930,6 @@ menu.toggle(ped_voice, translations.sex_voicelines, {translations.sex_voicelines
     mod_uses("ped", if on then 1 else -1)
 end)
 
-gluck_voicelines = false
-menu.toggle(ped_voice, translations.gluck_gluck_9000_voicelines, {translations.gluck_gluck_9000_voicelines_cmd}, translations.gluck_gluck_9000_voicelines_desc, function(on)
-    gluck_voicelines = on
-    mod_uses("ped", if on then 1 else -1)
-end)
-
 screamall = false
 menu.toggle(ped_voice, translations.scream, {translations.scream_cmd}, translations.scream_desc, function(on)
     screamall = on
@@ -1947,6 +2046,13 @@ menu.toggle(vehicles_root, translations.infinite_horn_on_all_nearby_vehicles, {t
     mod_uses("vehicle", if on then 1 else -1)
 end)
 
+yeetsubmarines = false
+menu.toggle(vehicles_root, translations.yeetsubmarines, { translations.yeetsubmarines_cmd},  translations.yeetsubmarines_desc, function(on)
+    yeetsubmarines = on
+    mod_uses("vehicle", if on then 1 else -1)
+end)
+
+
 halt_traffic = false
 menu.toggle(v_traffic_root, translations.halt_traffic, {translations.halt_traffic_cmd}, translations.halt_traffic_desc, function(on)
     halt_traffic = on
@@ -1971,37 +2077,41 @@ vehicles_thread = util.create_thread(function (thr)
                         entities.delete(veh)
                     end
                 end
-                if vhp_bars then
-                    local d_coord = ENTITY.GET_ENTITY_COORDS(veh, true)
-                    d_coord['z'] = d_coord['z'] + 1.0
-                    local hp = ENTITY.GET_ENTITY_HEALTH(veh)
-                    local perc = hp/ENTITY.GET_ENTITY_MAX_HEALTH(veh)*100
-                    if perc ~= 0 then
-                        local r = 0
-                        local g = 0
-                        local b = 0
-                        if perc == 100 then
-                            r = 0
-                            g = 255
-                            b = 0
-                        elseif perc < 100 and perc > 50 then
-                            r = 255
-                            g = 255
-                            b = 0
-                        else
-                            r = 255
-                            g = 0
-                            b = 0
-                        end
-                        GRAPHICS.DRAW_MARKER(43, d_coord['x'], d_coord['y'], d_coord['z'], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.50, 0, perc/150, r, g, b, 100, false, true, 2, false, 0, 0, false)
+
+                if vhp_bars and get_distance_between_entities(players.user_ped(), veh) < 200.0 and not ENTITY.IS_ENTITY_DEAD(veh, false) and ENTITY.IS_ENTITY_ON_SCREEN(veh) then
+                    local modelHash = ENTITY.GET_ENTITY_MODEL(veh)
+                    local min, max = v3.new(), v3.new()
+                    MISC.GET_MODEL_DIMENSIONS(modelHash, min, max)
+                    local pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(veh, 0.0, 0.0, max.z + 0.3)
+                    local perc = 0.0
+
+                    if not ENTITY.IS_ENTITY_DEAD(veh, false) then
+                        local maxHealth = ENTITY.GET_ENTITY_MAX_HEALTH(veh)
+                        local health = ENTITY.GET_ENTITY_HEALTH(veh)
+                        perc = health / maxHealth
+                        if perc > 1.0 then perc = 1.0  end
                     end
+                    
+                    local colour = get_health_colour(perc)
+                    local scale = v3.new(0.10, 0.0, interpolate(0.0, 0.7, perc))
+                    draw_marker(43, pos, v3(), v3(), scale, false, colour, 0, 0)
                 end
+
                 local driver = VEHICLE.GET_PED_IN_VEHICLE_SEAT(veh, -1)
                 -- FOR THINGS THAT SHOULD NOT WORK ON CARS WITH PLAYERS DRIVING THEM
-                if player_cur_car ~= veh and not (PED.IS_PED_A_PLAYER(driver) or driver == 0) then
+                if player_cur_car ~= veh and (not PED.IS_PED_A_PLAYER(driver)) or driver == 0 then
                     if reap then
-                        request_control_of_entity(veh)
+                        request_control_of_entity_once(veh)
                     end
+                    
+                    if yeetsubmarines then
+                        if VEHICLE.IS_VEHICLE_MODEL(veh, util.joaat("kosatka")) and ENTITY.IS_ENTITY_IN_WATER(veh) then
+                            request_control_of_entity_once(veh)
+                            ENTITY.SET_ENTITY_MAX_SPEED(veh, 10000)
+                            ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1,  0.0, 0.0, 10000, 0, 0, 0, 0, true, false, true, false, true)
+                        end 
+                    end
+
                     if inferno then
                         local coords = ENTITY.GET_ENTITY_COORDS(veh, true)
                         FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 7, 100.0, true, false, 1.0)
@@ -2076,7 +2186,7 @@ pickups_thread = util.create_thread(function(thr)
             all_pickups = entities.get_all_pickups_as_handles()
             for k,p in pairs(all_pickups) do
                 if reap then
-                    request_control_of_entity(p)
+                    request_control_of_entity_once(p)
                 end
 
                 if tp_all_pickups then
@@ -2977,7 +3087,7 @@ function send_player_label_sms(label, pid)
 end
 
 vehicle_hashes = {util.joaat("dune2"), util.joaat("speedo2"), util.joaat("krieger"), util.joaat("kuruma"), util.joaat('insurgent'), util.joaat('neon'), util.joaat('akula'), util.joaat('alphaz1'), util.joaat('rogue'), util.joaat('oppressor2'), util.joaat('hydra')}
-vehicle_names = {translations.v_1, translations.v_2, translations.v_3, translations.v_4, translations.v_5, translations.v_6, translations.v_7, translations.v_8, translations.v_9, translations.v_10, translations.v_11, translations.v_12, translations.custom}
+vehicle_names = {translations.v_1, translations.v_2, translations.v_3, translations.v_4, translations.v_5, translations.v_6, translations.v_7, translations.v_8, translations.v_9, translations.v_10, translations.v_11, translations.custom}
 
 function set_up_player_actions(pid)
     local childlock
@@ -2994,13 +3104,12 @@ function set_up_player_actions(pid)
     local chattrolls_root = menu.list(ls_hostile, translations.chat_trolling, {translations.chat_trolling_cmd}, "")
     local pstats_root = menu.list(ls_hostile, translations.stats, {translations.p_stats_cmd}, "")
 
-    ram_root = menu.list(ls_hostile, translations.ram, {translations.ram_cmd}, "")
+    ram_root = menu.list(ls_hostile, translations.ram_root, {translations.ram_root_cmd}, "")
 
-    local tp_options = {translations.to_me, translations.to_waypoint, translations.maze_bank, translations.underwater, translations.high_up, translations.lsc, translations.scp_173, translations.large_cell, translations.underwater_child_lock}
+    local tp_options = {translations.to_me, translations.to_waypoint, translations.maze_bank, translations.underwater, translations.high_up, translations.lsc, translations.scp_173, translations.large_cell, translations.luxury_autos_show_room, translations.underwater_child_lock}
     menu.list_action(playerveh_root, translations.teleport, {translations.teleport_cmd}, "", tp_options, function(index, value, click_type)
         local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
         if car ~= 0 then
-            request_control_of_entity(car)
             local c = {}
             pluto_switch index do
                 case 1:
@@ -3040,12 +3149,18 @@ function set_up_player_actions(pid)
                     c.z = 45.56497
                     break
                 case 9: 
+                    c.x = -787.4092
+                    c.y = -239.00093
+                    c.z = 37.734055
+                    break
+                case 10: 
                     menu.set_value(childlock, true)
                     c.x = 4497.2207
                     c.y = 8028.3086
                     c.z = -32.635174
                     break
             end
+            request_control_of_entity(car)
             tp_player_car_to_coords(pid, c)
         end
     end)
@@ -3621,12 +3736,14 @@ function set_up_player_actions(pid)
         coords.x = coords['x']
         coords.y = coords['y']
         coords.z = coords['z']
-        local hash = 779277682
+        local hash = util.joaat("prop_ld_container")
         request_model_load(hash)
-        local cage1 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
-        ENTITY.SET_ENTITY_ROTATION(cage1, 0.0, -90.0, 0.0, 1, true)
+        local cage1 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z']-3, true, false, false)
+        ENTITY.SET_ENTITY_ROTATION(cage1, -90.0, 0.0, 0.0, 1, true)
         local cage2 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
-        ENTITY.SET_ENTITY_ROTATION(cage2, 0.0, 90.0, 0.0, 1, true)
+        ENTITY.SET_ENTITY_ROTATION(cage2, 90.0, 0.0, 0.0, 1, true)
+        ENTITY.FREEZE_ENTITY_POSITION(cage1, true)
+        ENTITY.FREEZE_ENTITY_POSITION(cage2, true)
     end)
 
     menu.action(npctrolls_root, translations.summon_mariachi_band, {translations.summon_mariachi_band_cmd}, translations.summon_mariachi_band_desc, function(click_type)
@@ -3723,52 +3840,43 @@ function set_up_player_actions(pid)
         mod_uses("ped", if on then 1 else -1)
     end)
 
-    menu.action(npctrolls_root, translations.fill_car_with_peds, {translations.fill_car_with_peds_cmd}, "", function(click_type)
+    local fill_with_options = {translations.random_peds, translations.cops, translations.strippers}
+    menu.list_action(npctrolls_root, translations.fill_car_with_peds, {translations.fill_car_with_peds_cmd}, "", fill_with_options, function(index, value, click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if PED.IS_PED_IN_ANY_VEHICLE(target_ped, true) then
-                local veh = PED.GET_VEHICLE_PED_IS_IN(target_ped, false)
-                local success = true
-                while VEHICLE.ARE_ANY_VEHICLE_SEATS_FREE(veh) do
-                    util.yield()
-                    --  sometimes peds fail to get seated, so we will have something to break after 20 attempts if things go south
-                    local iteration = 0
-                    if iteration >= 20 then
-                        local success = false
-                        iteration = 0
-                        break
+            local veh = PED.GET_VEHICLE_PED_IS_IN(target_ped, false)
+            local success = true
+            for i = 0, VEHICLE.GET_VEHICLE_MODEL_NUMBER_OF_SEATS(ENTITY.GET_ENTITY_MODEL(veh)) do
+                local ped
+                if VEHICLE.IS_VEHICLE_SEAT_FREE(veh, i) then
+                    local c = ENTITY.GET_ENTITY_COORDS(veh)
+                    pluto_switch index do
+                        case 1:
+                            ped = PED.CREATE_RANDOM_PED(c.x, c.y, c.z)
+                            break
+                        case 2:
+                            local cops = {'s_f_y_cop_01', 's_m_m_snowcop_0', 's_m_y_hwaycop_01', 'csb_cop', 's_m_y_cop_01'}
+                            local pick = cops[math.random(1, #cops)]
+                            request_model_load(util.joaat(pick))
+                            ped = entities.create_ped(6, util.joaat(pick), c, 0)
+                            PED.SET_PED_AS_COP(ped, true)
+                            WEAPON.GIVE_WEAPON_TO_PED(ped, util.joaat("weapon_pistol"), 1000, false, false)
+                            break
+                        case 3:
+                            local strippers = {'csb_stripper_01', 'csb_stripper_02', 's_f_y_stripper_01', 's_f_y_stripper_02', 's_f_y_stripperlite'}
+                            local pick = strippers[math.random(1, #strippers)]
+                            request_model_load(util.joaat(pick))
+                            ped = entities.create_ped(6, util.joaat(pick), c, 0)
+                            break
                     end
-                    local iteration = iteration + 1
-                    local nearby_peds = entities.get_all_peds_as_handles()
-                    for k,ped in pairs(nearby_peds) do
-                        if PED.GET_VEHICLE_PED_IS_IN(ped, false) ~= veh and ENTITY.GET_ENTITY_HEALTH(ped) > 0 and not PED.IS_PED_FLEEING(ped) then
-                            --dont touch player peds
-                            if(PED.GET_PED_TYPE(ped) > 4) then
-                                local veh = PED.GET_VEHICLE_PED_IS_IN(target_ped, false)
-                                local iteration = iteration + 1
-                                    for index = 0, VEHICLE.GET_VEHICLE_MODEL_NUMBER_OF_SEATS(ENTITY.GET_ENTITY_MODEL(veh)) do
-                                        if VEHICLE.IS_VEHICLE_SEAT_FREE(veh, index) then
-                                            -- i think requesting control and clearing task deglitches the peds
-                                            -- this is specifically to counter weird A-posing
-                                            -- EDIT: it doesnt. why the fuck do some peds a-pose??? maybe ill find out eventually. oh well.
-                                            request_control_of_entity(ped)
-                                            TASK.CLEAR_PED_TASKS_IMMEDIATELY(ped)
-                                            PED.SET_PED_INTO_VEHICLE(ped, veh, index)
-                                            PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(ped, true)
-                                            PED.SET_PED_COMBAT_ATTRIBUTES(ped, 5, true)
-                                            PED.SET_PED_FLEE_ATTRIBUTES(ped, 0, false)
-                                            PED.SET_PED_COMBAT_ATTRIBUTES(ped, 46, true)
-                                            PED.SET_PED_CAN_BE_DRAGGED_OUT(ped, false)
-                                            PED.SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(ped, false)
-                                        end
-                                    end
-                                break
-                            end
-                        end
-                    end
+                    PED.SET_PED_INTO_VEHICLE(ped, veh, i)
+                    PED.SET_PED_COMBAT_ATTRIBUTES(ped, 5, true)
+                    PED.SET_PED_FLEE_ATTRIBUTES(ped, 0, false)
+                    PED.SET_PED_COMBAT_ATTRIBUTES(ped, 46, true)
+                    PED.SET_PED_CAN_BE_DRAGGED_OUT(ped, false)
+                    PED.SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(ped, false)
                 end
-                if success then
-                    util.toast(translations.fill_car_success)
-                end
+            end
         end
     end)
 
@@ -3776,15 +3884,18 @@ function set_up_player_actions(pid)
         while util.is_session_transition_active() or not NETWORK.NETWORK_IS_PLAYER_ACTIVE(pid) do
             util.yield()
         end
-        if pstats_root ~= nil then
-            -- thanks vsus
-            menu.action(pstats_root, translations.lap_dances_received .. tostring(get_lapdances_amount(pid)), {translations.lap_dances_received_cmd}, translations.lap_dances_received_desc, function(click_type)
-                chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_purchased .. tostring(get_lapdances_amount(pid)) .. translations.lap_dances_in_total, false, true, true)
-            end)
+        
+        if NETWORK.NETWORK_IS_PLAYER_ACTIVE(pid) then
+            if pstats_root ~= nil then
+                -- thanks vsus
+                menu.action(pstats_root, translations.lap_dances_received .. tostring(get_lapdances_amount(pid)), {translations.lap_dances_received_cmd}, translations.lap_dances_received_desc, function(click_type)
+                    chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_purchased .. tostring(get_lapdances_amount(pid)) .. translations.lap_dances_in_total, false, true, true)
+                end)
 
-            menu.action(pstats_root, translations.hookers_bought .. tostring(get_prostitutes_solicited(pid)), {translations.hookers_bought_cmd}, translations.hookers_bought_desc, function(click_type)
-                chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_solicited .. tostring(get_prostitutes_solicited(pid)) .. translations.hookers_in_total, false, true, true)
-            end)
+                menu.action(pstats_root, translations.hookers_bought .. tostring(get_prostitutes_solicited(pid)), {translations.hookers_bought_cmd}, translations.hookers_bought_desc, function(click_type)
+                    chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_solicited .. tostring(get_prostitutes_solicited(pid)) .. translations.hookers_in_total, false, true, true)
+                end)
+            end
         end
 end
 
@@ -3821,6 +3932,13 @@ menu.toggle(ap_root, translations.antioppressor, { translations.antioppressor_cm
     antioppressor = on
     mod_uses("player", if on then 1 else -1)
 end)
+
+flyswatter = false
+menu.toggle(ap_root, translations.flyswatter, { translations.flyswatter_cmd},  translations.flyswatter_desc, function(on)
+    flyswatter = on
+    mod_uses("player", if on then 1 else -1)
+end)
+
 
 noarmedvehs = false
 menu.toggle(ap_root, translations.delete_armed_vehicles, {translations.delete_armed_vehicles_cmd}, translations.delete_armed_vehicles_desc, function(on)
@@ -3876,13 +3994,6 @@ menu.list_action(ap_root, translations.announce, {translations.announce_cmd}, ""
     end
 end)
 
-menu.action(aphostile_root, translations.kick_all_non_friends, {translations.kick_all_non_friends_cmd}, translations.kick_all_non_friends_desc, function(click_type)
-    local victims = players.list(fals, false, true)
-    for k,pid in pairs(victims) do
-        menu.trigger_commands(translations.kick_cmd .. PLAYER.GET_PLAYER_NAME(pid))
-    end
-end)
-
 infibounty_amt = 10000
 menu.slider(aphostile_root, translations.infibounty_amount, {translations.infibounty_amount_cmd}, "", 0, 10000, 10000, 1, function(s)
     infibounty_amt = s
@@ -3892,6 +4003,12 @@ menu.slider(aphostile_root, translations.infibounty_amount, {translations.infibo
 menu.toggle_loop(aphostile_root, translations.infibounty, {translations.infibounty_cmd}, translations.infibounty_desc, function(click_type)
     menu.trigger_commands(translations.bountyall_cmd .. tostring(infibounty_amt))
     util.yield(60000)
+end)
+
+christianity = false
+menu.toggle(aphostile_root, translations.christianity, {translations.christianity_cmd}, translations.christianity_desc, function(on)
+    christianity = on 
+    mod_uses("player", if on then 1 else -1)
 end)
 
 menu.action(aphostile_root, translations.crash_all, {translations.crash_all_cmd}, translations.crash_all_desc, function(click_type)
@@ -3957,6 +4074,12 @@ end)
 
 cur_names = {}
 players.on_join(function(pid)
+    if players.is_marked_as_admin(pid) then 
+        if admin_bail then 
+            util.toast("Admin detected! Bailing.")
+            menu.trigger_commands("quittosp")
+        end
+    end
     if pid ~= players.user() then
         local name = PLAYER.GET_PLAYER_NAME(pid)
         cur_names[pid+1] = name
@@ -3972,7 +4095,16 @@ players.on_leave(function(pid)
     end
 end)
 
-
+all_sex_voicenames = {
+    "S_F_Y_HOOKER_01_WHITE_FULL_01",
+    "S_F_Y_HOOKER_01_WHITE_FULL_02",
+    "S_F_Y_HOOKER_01_WHITE_FULL_03",
+    "S_F_Y_HOOKER_02_WHITE_FULL_01",
+    "S_F_Y_HOOKER_02_WHITE_FULL_02",
+    "S_F_Y_HOOKER_02_WHITE_FULL_03",
+    "S_F_Y_HOOKER_03_BLACK_FULL_01",
+    "S_F_Y_HOOKER_03_BLACK_FULL_03",
+}
 
 players_thread = util.create_thread(function (thr)
     while true do
@@ -4005,6 +4137,17 @@ players_thread = util.create_thread(function (thr)
                                 end
                             end
                         end
+                    end
+                end
+                if christianity then
+                    local pc = ENTITY.GET_ENTITY_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid))
+                    local scc = {}
+                    scc['x'] = 122.84036
+                    scc['y'] = -1291.338
+                    scc['z'] = 29.283897
+                    local dist = MISC.GET_DISTANCE_BETWEEN_COORDS(scc['x'], scc['y'], scc['z'], pc['x'], pc['y'], pc['z'], true)
+                    if dist <= 10 then
+                        FIRE.ADD_EXPLOSION(pc['x'], pc['y'], pc['z'], 12, 100.0, true, false, 0.0)
                     end
                 end
                 if earrape_all then
@@ -4046,6 +4189,19 @@ players_thread = util.create_thread(function (thr)
                       local hash = util.joaat("oppressor2")
                       if VEHICLE.IS_VEHICLE_MODEL(vehicle, hash) then
                         entities.delete(vehicle)
+                      end
+                    end
+                end
+
+                if flyswatter then 
+                    local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+                    local vehicle = PED.GET_VEHICLE_PED_IS_IN(ped, false)
+                    if vehicle ~= 0 then
+                      local hash = util.joaat("oppressor2")
+                      if VEHICLE.IS_VEHICLE_MODEL(vehicle, hash) and ENTITY.GET_ENTITY_HEIGHT_ABOVE_GROUND(vehicle) > 10 then
+                        request_control_of_entity_once(vehicle)
+                        ENTITY.SET_ENTITY_MAX_SPEED(vehicle, 10000)
+                        ENTITY.APPLY_FORCE_TO_ENTITY(vehicle, 1,  0.0, 0.0, -10000, 0, 0, 0, 0, true, false, true, false, true)
                       end
                     end
                 end
