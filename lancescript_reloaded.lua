@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.74
+script_version = 7.75
 util.require_natives("1640181023")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -452,11 +452,13 @@ menu.action(chat_presets_root, translations.random_joke, {translations.random_jo
 end)
 
 menu.toggle_loop(chat_presets_root, translations.random_joke_loop, {translations.random_joke_loop_cmd}, translations.random_joke_loop_desc, function(click_type)
-    local joke = get_random_joke()
-    if joke ~= "FAIL" then
-        chat.send_message(joke, false, true, true)
+    if util.is_session_started() then
+        local joke = get_random_joke()
+        if joke ~= "FAIL" then
+            chat.send_message(joke, false, true, true)
+        end
+        util.yield(5000)
     end
-    util.yield(5000)
 end)
 
 
