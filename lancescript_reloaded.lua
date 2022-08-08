@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.75
+script_version = 7.85
 util.require_natives("1640181023")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -1795,6 +1795,33 @@ menu.action(peds_root, translations.teleport_all_to_me, {translations.teleport_a
     end
 end)
 
+menu.action(peds_root, translations.stack_all_peds, {translations.stack_all_peds_cmd}, "", function(click_type)
+    local c = ENTITY.GET_ENTITY_COORDS(players.user_ped())
+    all_peds = entities.get_all_peds_as_handles()
+    local last_ped = 0
+    local last_ped_ht = 0
+    util.toast(translations.please_wait)
+    for k,ped in pairs(all_peds) do
+        if not PED.IS_PED_A_PLAYER(ped) and not PED.IS_PED_FATALLY_INJURED(ped) then
+            request_control_of_entity(ped)
+            if PED.IS_PED_IN_ANY_VEHICLE(ped, true) then
+                TASK.CLEAR_PED_TASKS_IMMEDIATELY(ped)
+                TASK.TASK_LEAVE_ANY_VEHICLE(ped, 0, 16)
+            end
+
+            ENTITY.DETACH_ENTITY(ped, false, false)
+            if last_ped ~= 0 then
+                ENTITY.ATTACH_ENTITY_TO_ENTITY(ped, last_ped, 0, 0.0, 0.0, last_ped_ht-0.5, 0.0, 0.0, 0.0, false, false, false, false, 0, false)
+            else
+                ENTITY.SET_ENTITY_COORDS(ped, c.x, c.y, c.z)
+            end
+            last_ped = ped
+            last_ped_ht = get_model_size(ENTITY.GET_ENTITY_MODEL(ped)).z
+        end
+    end
+end)
+
+
 rain_peds = false
 menu.toggle(peds_root, translations.rain_peds, {translations.rain_peds_cmd}, "...", function(on)
     rain_peds = on
@@ -3382,6 +3409,26 @@ function set_up_player_actions(pid)
         local veh = entities.create_vehicle(hash, coords, 0.0)
     end)
 
+    
+    menu.action(ls_hostile, translations.ragdoll, {translations.ragdoll_cmd}, "", function(on)
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), 0.0, 0.0, 2.8)
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 70, 100.0, false, true, 0.0)
+    end)
+
+    menu.action(ls_hostile, translations.heart_attack, {translations.heart_attack_cmd}, translations.heart_attack_desc, function(on)
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), 0.0, 0.5, 1.0)
+        local v = PED.GET_VEHICLE_PED_IS_USING(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid))
+        if v ~= 0 then 
+            request_control_of_entity(v)
+            ENTITY.SET_ENTITY_INVINCIBLE(v, true)
+        end
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 47, 100.0, false, true, 0.0)
+        if v ~= 0 then 
+            request_control_of_entity(v)
+            ENTITY.SET_ENTITY_INVINCIBLE(v, false)
+        end
+    end)
+
     local obj_options = {translations.ramp, translations.barrier, translations.windmill, translations.radar}
     menu.list_action(ls_hostile, translations.spawn_object, {translations.spawn_object_cmd}, translations.spawn_object_desc, obj_options, function (index, value, click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
@@ -3888,16 +3935,14 @@ function set_up_player_actions(pid)
         end
         
         if NETWORK.NETWORK_IS_PLAYER_ACTIVE(pid) then
-            if pstats_root ~= nil then
                 -- thanks vsus
-                menu.action(pstats_root, translations.lap_dances_received .. tostring(get_lapdances_amount(pid)), {translations.lap_dances_received_cmd}, translations.lap_dances_received_desc, function(click_type)
+                pcall(menu.action, pstats_root, translations.lap_dances_received .. tostring(get_lapdances_amount(pid)), {translations.lap_dances_received_cmd}, translations.lap_dances_received_desc, function(click_type)
                     chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_purchased .. tostring(get_lapdances_amount(pid)) .. translations.lap_dances_in_total, false, true, true)
                 end)
 
-                menu.action(pstats_root, translations.hookers_bought .. tostring(get_prostitutes_solicited(pid)), {translations.hookers_bought_cmd}, translations.hookers_bought_desc, function(click_type)
+                pcall(menu.action, pstats_root, translations.hookers_bought .. tostring(get_prostitutes_solicited(pid)), {translations.hookers_bought_cmd}, translations.hookers_bought_desc, function(click_type)
                     chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_solicited .. tostring(get_prostitutes_solicited(pid)) .. translations.hookers_in_total, false, true, true)
                 end)
-            end
         end
 end
 
@@ -4154,6 +4199,7 @@ players_thread = util.create_thread(function (thr)
                 end
                 if earrape_all then
                     local this_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+                    util.toast(PLAYER.GET_PLAYER_NAME(pid))
                     for i = 1, 20 do
                         AUDIO.PLAY_SOUND_FROM_ENTITY(-1, "Bed", this_ped, "WastedSounds", true, true)
                     end
