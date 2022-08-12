@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.85
+script_version = 7.86
 util.require_natives("1640181023")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -31,7 +31,7 @@ if not filesystem.is_dir(translations_dir) then
     filesystem.mkdirs(translations_dir)
 end
 
-function table_size(T)
+local function table_size(T)
     local count = 0
     for _ in pairs(T) do count = count + 1 end
     return count
@@ -42,7 +42,13 @@ local function ends_with(str, ending)
     return ending == "" or str:sub(-#ending) == ending
  end
 
-local translations
+local translations = {}
+setmetatable(translations, {
+    __index = function (self, key)
+        return key
+    end
+})
+
 local translation_dir_files = {}
 local just_translation_files = {}
 for i, path in ipairs(filesystem.list_files(translations_dir)) do
@@ -74,6 +80,7 @@ end
 
 -- do not play with this unless you want shit breakin!
 local need_default_translation
+local fallback = false
 if not table.contains(translation_dir_files, 'english.lua') or updated then 
     need_default_translation = true
     async_http.init('gist.githubusercontent.com', '/xSetrox/013ad730bf38b9684151637356b1138c/raw', function(data)
@@ -82,15 +89,15 @@ if not table.contains(translation_dir_files, 'english.lua') or updated then
         file:close()
         need_default_translation = false
     end, function()
-        util.toast('! Failed to retrieve default translation table. Script must exit.')
-        util.stop_script()
+        util.toast('!!! Failed to retrieve default translation table. All options that would be translated will look weird. Please check your connection to GitHub.')
+        fallback = true
     end)
     async_http.dispatch()
 else
     need_default_translation = false
 end
 
-while need_default_translation do 
+while need_default_translation and not fallback do 
     util.toast("Installing default/english translation...")
     util.yield()
 end
@@ -103,29 +110,19 @@ if not table.contains(translation_dir_files, 'selected_language.txt') then
 end
 
 -- read selected language 
-local selected_lang_file = io.open(selected_lang_path, 'r')
-local selected_language = selected_lang_file:read()
-if not table.contains(translation_dir_files, selected_language) then
-    util.toast(selected_language .. ' was not found. Defaulting to English.')
-    translations = require(relative_translations_dir .. "english")
-else
-    translations = require(relative_translations_dir .. '\\' .. selected_language:gsub('.lua', ''))
-end
-
--- backwards-compatibility
-if selected_language ~= 'english.lua' then
-    comparison_translations = require(relative_translations_dir .. "english")
-    if table_size(comparison_translations) ~= table_size(translations) then
-        if table.contains(translations, missing_translations) then
-            util.toast(translations.missing_translations)
-        else
-            util.toast("[LANCESCRIPT] Some translations are missing. Some features will be replaced with their keys until this is resolved.")
-        end
+if not fallback then
+    local selected_lang_file = io.open(selected_lang_path, 'r')
+    local selected_language = selected_lang_file:read()
+    if not table.contains(translation_dir_files, selected_language) then
+        util.toast(selected_language .. ' was not found. Defaulting to English.')
+        translations = require(relative_translations_dir .. "english")
+    else
+        translations = require(relative_translations_dir .. '\\' .. selected_language:gsub('.lua', ''))
     end
 end
 
 -- log if verbose/debug mode is on
-function ls_log(content)
+local function ls_log(content)
     if ls_debug then
         util.toast(content)
         util.log(translations.script_name_for_log .. content)
@@ -194,7 +191,7 @@ menu.action(menu.my_root(), translations.players_shortcut, {}, translations.play
     menu.trigger_command(players_shortcut_command)
 end)
 
-function get_stat_by_name(stat_name, character)
+local function get_stat_by_name(stat_name, character)
     if character then 
         stat_name = "MP" .. tostring(util.get_char_slot()) .. "_" .. stat_name 
     end
@@ -203,11 +200,11 @@ function get_stat_by_name(stat_name, character)
     return memory.read_int(out)
 end
 
-function get_prostitutes_solicited(pid)
+local function get_prostitutes_solicited(pid)
     return memory.read_int(memory.script_global(1853348 + 1 + (pid * 834) + 205 + 54))
 end
 
-function get_lapdances_amount(pid) 
+local function get_lapdances_amount(pid) 
     return memory.read_int(memory.script_global(1853348 + 1 + (pid * 834) + 205 + 55))
 end
 ap_root = menu.list(online_root, translations.all_players, {translations.all_players_cmd}, "")
@@ -242,7 +239,8 @@ player_uses = 0
 object_uses = 0
 robustmode = false
 reap = false
-function mod_uses(type, incr)
+
+local function mod_uses(type, incr)
     -- this func is a patch. every time the script loads, all the toggles load and set their state. in some cases this makes the _uses optimization negative and breaks things. this prevents that.
     if incr < 0 and is_loading then
         -- ignore if script is still loading
@@ -280,14 +278,29 @@ end
 
 -- UTILTITY FUNCTIONS
 
+function request_model_load(hash)
+    request_time = os.time()
+    if not STREAMING.IS_MODEL_VALID(hash) then
+        return
+    end
+    STREAMING.REQUEST_MODEL(hash)
+    while not STREAMING.HAS_MODEL_LOADED(hash) do
+        if os.time() - request_time >= 10 then
+            break
+        end
+        util.yield()
+    end
+end
+
+
 
 -- credit to vsus
 
-function is_script_running(str)
+local function is_script_running(str)
     return SCRIPT._GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(util.joaat(str)) > 0
 end
 
-function request_game_script(str)
+local function request_game_script(str)
     if not SCRIPT.DOES_SCRIPT_EXIST(str) or is_script_running(str) then
         return false
     end
@@ -307,7 +320,7 @@ local function get_entity_owner(entity)
 	return (addr ~= 0) and memory.read_byte(addr + 0x49) or -1
 end
 
-function world_to_screen_coords(x, y, z)
+local function world_to_screen_coords(x, y, z)
     sc_x = memory.alloc(8)
     sc_y = memory.alloc(8)
     GRAPHICS.GET_SCREEN_COORD_FROM_WORLD_COORD(x, y, z, sc_x, sc_y)
@@ -318,7 +331,7 @@ function world_to_screen_coords(x, y, z)
     return ret
 end
 
-function is_entity_a_projectile(hash)
+local function is_entity_a_projectile(hash)
     local all_projectile_hashes = {
         util.joaat("w_ex_vehiclemissile_1"),
         util.joaat("w_ex_vehiclemissile_2"),
@@ -384,7 +397,7 @@ end)
 
 --https://stackoverflow.com/questions/34618946/lua-base64-encode
 local b='/+9876543210zyxwvutsrqponmlkjihgfedcbaZYXWVUTSRQPONMLKJIHGFEDCBA'
-function b64_enc(data)
+local function b64_enc(data)
     return ((data:gsub('.', function(x) 
         local r,b='',x:byte()
         for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
@@ -399,7 +412,7 @@ end
 --https://stackoverflow.com/questions/34618946/lua-base64-encode
 
 -- decoding
-function b64_dec(data)
+local function b64_dec(data)
     data = string.gsub(data, '[^'..b..'=]', '')
     return (data:gsub('.', function(x)
         if (x == '=') then return '' end
@@ -424,7 +437,7 @@ menu.toggle(protections_root, translations.admin_bail, {translations.admin_bail_
     admin_bail = on
 end, true)
 
-function get_random_joke()
+local function get_random_joke()
     local joke = 'WIP'
     local in_progress = true
     async_http.init('icanhazdadjoke.com', '', function(data)
@@ -481,12 +494,12 @@ end
 
 memory.write_string(util_alloc, b64_dec("nZqek5CRmv=="))
 
-function pid_to_handle(pid)
+local function pid_to_handle(pid)
     NETWORK.NETWORK_HANDLE_FROM_PLAYER(pid, handle_ptr, 13)
     return handle_ptr
 end
 
-function get_model_size(hash)
+local function get_model_size(hash)
     local minptr = memory.alloc(24)
     local maxptr = memory.alloc(24)
     MISC.GET_MODEL_DIMENSIONS(hash, minptr, maxptr)
@@ -501,7 +514,7 @@ function get_model_size(hash)
 end
 
 -- creative rgb vector from params (unused func??)
-function to_rgb(r, g, b, a)
+local function to_rgb(r, g, b, a)
     local color = {}
     color.r = r
     color.g = g
@@ -511,7 +524,7 @@ function to_rgb(r, g, b, a)
 end
 
 -- credit to nowiry
-function set_entity_face_entity(entity, target, usePitch)
+local function set_entity_face_entity(entity, target, usePitch)
     local pos1 = ENTITY.GET_ENTITY_COORDS(entity, false)
     local pos2 = ENTITY.GET_ENTITY_COORDS(target, false)
     local rel = v3.new(pos2)
@@ -543,13 +556,13 @@ local function get_entity_owner(entity)
 end
 
 
-function interpolate(y0, y1, perc)
+local function interpolate(y0, y1, perc)
 	perc = perc > 1.0 and 1.0 or perc
 	return (1 - perc) * y0 + perc * y1
 end
 
 
-function get_health_colour(perc)
+local function get_health_colour(perc)
 	local result = {a = 255}
 	local r, g, b
 	if perc <= 0.5 then
@@ -568,7 +581,7 @@ function get_health_colour(perc)
 end
 
 
-function draw_marker(type, pos, dir, rot, scale, rotate, colour, txdDict, txdName)
+local function draw_marker(type, pos, dir, rot, scale, rotate, colour, txdDict, txdName)
     txdDict = txdDict or 0
     txdName = txdName or 0
     colour = colour or {r = 255, g = 255, b = 255, a = 255}
@@ -576,7 +589,7 @@ function draw_marker(type, pos, dir, rot, scale, rotate, colour, txdDict, txdNam
 end
 
 
-function get_distance_between_entities(entity, target)
+local function get_distance_between_entities(entity, target)
 	if not ENTITY.DOES_ENTITY_EXIST(entity) or not ENTITY.DOES_ENTITY_EXIST(target) then
 		return 0.0
 	end
@@ -585,7 +598,7 @@ function get_distance_between_entities(entity, target)
 end
 
 
-function get_offset_from_gameplay_camera(distance)
+local function get_offset_from_gameplay_camera(distance)
     local cam_rot = CAM.GET_GAMEPLAY_CAM_ROT(0)
     local cam_pos = CAM.GET_GAMEPLAY_CAM_COORD()
     local direction = v3.toDir(cam_rot)
@@ -599,7 +612,7 @@ function get_offset_from_gameplay_camera(distance)
 end
 
 -- credit to nowiry i think
-function get_offset_from_camera(distance, camera)
+local function get_offset_from_camera(distance, camera)
     local cam_rot = CAM.GET_CAM_ROT(camera, 0)
     local cam_pos = CAM.GET_CAM_COORD(camera)
     local direction = v3.toDir(cam_rot)
@@ -613,7 +626,7 @@ function get_offset_from_camera(distance, camera)
 end
 
 -- also credit to nowiry i believe
-function raycast_gameplay_cam(flag, distance)
+local function raycast_gameplay_cam(flag, distance)
     local ptr1, ptr2, ptr3, ptr4 = memory.alloc(), memory.alloc(), memory.alloc(), memory.alloc()
     local cam_rot = CAM.GET_GAMEPLAY_CAM_ROT(0)
     local cam_pos = CAM.GET_GAMEPLAY_CAM_COORD()
@@ -644,7 +657,7 @@ function raycast_gameplay_cam(flag, distance)
 end
 
 -- i think nowiry gets credit here
-function raycast_cam(flag, distance, cam)
+local function raycast_cam(flag, distance, cam)
     local ptr1, ptr2, ptr3, ptr4 = memory.alloc(), memory.alloc(), memory.alloc(), memory.alloc()
     local cam_rot = CAM.GET_CAM_ROT(cam, 0)
     local cam_pos = CAM.GET_CAM_COORD(cam)
@@ -675,7 +688,7 @@ function raycast_cam(flag, distance, cam)
 end
 
 -- set a player into a free seat in a vehicle, if any exist
-function set_player_into_suitable_seat(ent)
+local function set_player_into_suitable_seat(ent)
     local driver = VEHICLE.GET_PED_IN_VEHICLE_SEAT(ent, -1)
     if not PED.IS_PED_A_PLAYER(driver) or driver == 0 then
         if driver ~= 0 then
@@ -693,7 +706,7 @@ end
 
 -- aim info
 local ent_types = {translations.ped_type_1, translations.ped_type_2, translations.ped_type_3, translations.ped_type_4}
-function get_aim_info()
+local function get_aim_info()
     local outptr = memory.alloc(4)
     local success = PLAYER.GET_ENTITY_PLAYER_IS_FREE_AIMING_AT(players.user(), outptr)
     local info = {}
@@ -724,12 +737,12 @@ function get_aim_info()
 end
 
 -- shorthand for running commands
-function kick_from_veh(pid)
+local function kick_from_veh(pid)
     menu.trigger_commands("vehkick" .. PLAYER.GET_PLAYER_NAME(pid))
 end
 
 -- npc carjack algorithm 3.0
-function npc_jack(target, nearest)
+local function npc_jack(target, nearest)
     npc_jackthr = util.create_thread(function(thr)
         local player_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(target)
         local last_veh = PED.GET_VEHICLE_PED_IS_IN(player_ped, true)
@@ -758,7 +771,7 @@ function npc_jack(target, nearest)
 end
 
 -- gets a random pedestrian
-function get_random_ped()
+local function get_random_ped()
     peds = entities.get_all_peds_as_handles()
     npcs = {}
     valid = 0
@@ -771,7 +784,7 @@ function get_random_ped()
     return npcs[math.random(valid)]
 end
 
-function spawn_object_in_front_of_ped(ped, hash, ang, room, zoff, setonground)
+local function spawn_object_in_front_of_ped(ped, hash, ang, room, zoff, setonground)
     coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, room, zoff)
     request_model_load(hash)
     hdng = ENTITY.GET_ENTITY_HEADING(ped)
@@ -787,7 +800,7 @@ function spawn_object_in_front_of_ped(ped, hash, ang, room, zoff, setonground)
 end
 
 -- entity ownership forcing
-function request_control_of_entity(ent)
+local function request_control_of_entity(ent)
     if not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(ent) and util.is_session_started() then
         local netid = NETWORK.NETWORK_GET_NETWORK_ID_FROM_ENTITY(ent)
         NETWORK.SET_NETWORK_ID_CAN_MIGRATE(netid, true)
@@ -804,7 +817,7 @@ function request_control_of_entity(ent)
     end
 end
 
-function request_control_of_entity_once(ent)
+local function request_control_of_entity_once(ent)
     if not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(ent) and util.is_session_started() then
         local netid = NETWORK.NETWORK_GET_NETWORK_ID_FROM_ENTITY(ent)
         NETWORK.SET_NETWORK_ID_CAN_MIGRATE(netid, true)
@@ -813,7 +826,7 @@ function request_control_of_entity_once(ent)
 end
 
 -- model load requesting, very important
-function request_model_load(hash)
+local function request_model_load(hash)
     request_time = os.time()
     if not STREAMING.IS_MODEL_VALID(hash) then
         return
@@ -828,7 +841,7 @@ function request_model_load(hash)
 end
 
 -- texure loading
-function request_texture_dict_load(dict_name)
+local function request_texture_dict_load(dict_name)
     request_time = os.time()
     GRAPHICS.REQUEST_STREAMED_TEXTURE_DICT(dict_name, true)
     while not GRAPHICS.HAS_STREAMED_TEXTURE_DICT_LOADED(dict_name) do
@@ -840,7 +853,7 @@ function request_texture_dict_load(dict_name)
 end
 
 -- get where the ground is (very broken func tbh)
-function get_ground_z(coords)
+local function get_ground_z(coords)
     local start_time = os.time()
     while true do
         if os.time() - start_time >= 5 then
@@ -856,7 +869,7 @@ function get_ground_z(coords)
 end
 
 -- gets coords of waypoint
-function get_waypoint_coords()
+local function get_waypoint_coords()
     local coords = HUD.GET_BLIP_COORDS(HUD.GET_FIRST_BLIP_INFO_ID(8))
     if coords['x'] == 0 and coords['y'] == 0 and coords['z'] == 0 then
         return nil
@@ -1274,7 +1287,7 @@ menu.toggle(entity_gun, translations.entity_gun_gravity, {translations.entity_gu
 end)
 
 saimbot_mode = "closest"
-function get_aimbot_target()
+local function get_aimbot_target()
     local dist = 1000000000
     local cur_tar = 0
     -- an aimbot should have immaculate response time so we shouldnt rely on the other entity pools for this data
@@ -1664,7 +1677,7 @@ peds_thread = util.create_thread(function (thr)
                     end
 
                     if allpeds_gun ~= 0 then
-                        WEAPON.GIVE_WEAPON_TO_PED(ped, allpeds_gun, 9999, false, false)
+                        WEAPON.GIVE_WEAPON_TO_PED(ped, allpeds_gun, 9999, false, true)
                     end
 
                     -- ONLINE INTERACTIONS
@@ -1694,7 +1707,7 @@ ped_spawn = menu.list(peds_root, translations.ped_spawn, {translations.ped_spawn
 
 -- SPAWNING PEDS
 num_peds_spawn = 1
-function spawn_ped(hash)
+local function spawn_ped(hash)
     coords = ENTITY.GET_ENTITY_COORDS(players.user_ped(), false)
     coords.x = coords['x']
     coords.y = coords['y']
@@ -1725,7 +1738,7 @@ function spawn_ped(hash)
 end
 
 all_pets = {}
-function spawn_pet(hash)
+local function spawn_pet(hash)
     request_model_load(hash)
     local c = ENTITY.GET_ENTITY_COORDS(players.user_ped(), false)
     local pet = entities.create_ped(28, hash, c, 0)
@@ -1836,7 +1849,7 @@ end)
 
 
 
-function task_handler(type)
+local function task_handler(type)
     -- whatever, just get it once this frame
     all_peds = entities.get_all_peds_as_handles()
     player_ped = PLAYER.PLAYER_PED_ID()
@@ -1971,7 +1984,7 @@ v_phys_root = menu.list(vehicles_root, translations.vehicle_physics, {translatio
 vc_root = menu.list(v_phys_root, translations.vehicle_chaos, {translations.vehicle_chaos_root_cmd}, translations.vehicle_chaos_desc)
 v_traffic_root = menu.list(vehicles_root, translations.vehicle_traffic, {translations.vehicle_traffic_cmd}, translations.vehicle_traffic_desc)
 
-function get_closest_vehicle(entity)
+local function get_closest_vehicle(entity)
     local coords = ENTITY.GET_ENTITY_COORDS(entity, true)
     local vehicles = entities.get_all_vehicles_as_handles()
     -- init this at some ridiculously large number we will never reach, ez
@@ -2271,7 +2284,7 @@ menu.toggle(projectiles_root, translations.blips_for_projectiles, {translations.
     mod_uses("object", if on then 1 else -1)
 end)
 
-function get_closest_projectile()
+local function get_closest_projectile()
     local closest = 100000000000
     local closest_obj = 0
     for k,obj in pairs(entities.get_all_objects_as_handles()) do 
@@ -2425,7 +2438,7 @@ end)
 
 local angry_planes = false
 local angry_planes_tar = 0
-function start_angryplanes_thread()
+local function start_angryplanes_thread()
     util.create_thread(function()
         local v_hashes = {util.joaat('lazer'), util.joaat('jet'), util.joaat('cargoplane'), util.joaat('titan'), util.joaat('luxor'), util.joaat('seabreeze'), util.joaat('vestra'), util.joaat('volatol'), util.joaat('tula'), util.joaat('buzzard'), util.joaat('avenger')}
         if angry_planes_tar == 0 then 
@@ -2526,7 +2539,7 @@ end)
 
 --LOCK_MINIMAP_ANGLE(int angle)
 
-function alert_thuds()
+local function alert_thuds()
     util.create_thread(function()
         AUDIO.PLAY_SOUND_FRONTEND(-1, "Hit_In", "PLAYER_SWITCH_CUSTOM_SOUNDSET")
         util.yield(500)
@@ -2537,7 +2550,7 @@ function alert_thuds()
 end
 
 fake_alert_delay = 0
-function show_custom_alert_until_enter(l1)
+local function show_custom_alert_until_enter(l1)
     util.yield(fake_alert_delay)
     alert_thuds()
     poptime = os.time()
@@ -2608,7 +2621,7 @@ end)
 
 -- PLAYERS AND TROLLING
 
-function get_best_mug_target()
+local function get_best_mug_target()
     local most = 0
     local mostp = 0
     for k,p in pairs(players.list(true, true, true)) do
@@ -2630,7 +2643,7 @@ function get_best_mug_target()
     end
 end
 
-function get_poorest_player()
+local function get_poorest_player()
     local least = 10000000000000000
     local leastp = 0
     for k,p in pairs(players.list(true, true, true)) do
@@ -2652,7 +2665,7 @@ function get_poorest_player()
     end
 end
 
-function get_richest_player()
+local function get_richest_player()
     local most = 0
     local mostp = 0
     for k,p in pairs(players.list(false, true, true)) do
@@ -2674,7 +2687,7 @@ function get_richest_player()
     end
 end
 
-function get_horniest_player()
+local function get_horniest_player()
     local highest_horniness = 0
     local horniest = 0
     local most_lapdances = 0
@@ -2704,14 +2717,14 @@ end
 
 
 
-function max_out_car(veh)
+local function max_out_car(veh)
     for i=0, 47 do
         num = VEHICLE.GET_NUM_VEHICLE_MODS(veh, i)
         VEHICLE.SET_VEHICLE_MOD(veh, i, num -1, true)
     end
 end
 
-function ram_ped_with(ped, vehicle, offset, sog)
+local function ram_ped_with(ped, vehicle, offset, sog)
     request_model_load(vehicle)
     local front = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, offset, 0.0)
     front.x = front['x']
@@ -2726,7 +2739,7 @@ function ram_ped_with(ped, vehicle, offset, sog)
     VEHICLE.SET_VEHICLE_FORWARD_SPEED(veh, 100.0)
 end
 
-function give_vehicle(pid, hash)
+local function give_vehicle(pid, hash)
     request_model_load(hash)
     local plyr = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(plyr, 0.0, 5.0, 0.0)
@@ -2737,13 +2750,13 @@ function give_vehicle(pid, hash)
     VEHICLE.SET_VEHICLE_DOOR_LATCHED(car, 0, false, false, true)
 end
 
-function give_vehicle_all(hash)
+local function give_vehicle_all(hash)
     for k,p in pairs(players.list(true, true, true)) do
         give_vehicle(p, hash)
     end
 end
 
-function attachto(offx, offy, offz, pid, angx, angy, angz, hash, bone, isnpc, isveh)
+local function attachto(offx, offy, offz, pid, angx, angy, angz, hash, bone, isnpc, isveh)
     local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     local bone = PED.GET_PED_BONE_INDEX(ped, bone)
     local coords = ENTITY.GET_ENTITY_COORDS(ped, true)
@@ -2762,7 +2775,7 @@ function attachto(offx, offy, offz, pid, angx, angy, angz, hash, bone, isnpc, is
     ENTITY.SET_ENTITY_COMPLETELY_DISABLE_COLLISION(obj, false, true)
 end
 
-function give_car_addon(pid, hash, center, ang)
+local function give_car_addon(pid, hash, center, ang)
     local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
     local pos = ENTITY.GET_ENTITY_COORDS(car, true)
     pos.x = pos['x']
@@ -2778,13 +2791,13 @@ function give_car_addon(pid, hash, center, ang)
     end
 end
 
-function give_all_car_addon(hash, center, ang)
+local function give_all_car_addon(hash, center, ang)
     for k,pid in pairs(players.list(false, true, true)) do
         give_car_addon(pid, hash, center, ang)
     end
 end
 
-function attachall(offx, offy, offz, angx, angy, angz, hash, bone, isnpc, isveh)
+local function attachall(offx, offy, offz, angx, angy, angz, hash, bone, isnpc, isveh)
     request_model_load(hash)
     for k, pid in pairs(players.list(false, true, true)) do
         attachto(offx, offy, offz, pid, angx, angy, angz, hash, bone, isnpc, isveh)
@@ -2799,7 +2812,7 @@ atkhealth = 100
 atk_critical_hits = true
 freezetar = -1
 
-function tp_player_car_to_coords(pid, coord)
+local function tp_player_car_to_coords(pid, coord)
     local name = PLAYER.GET_PLAYER_NAME(pid)
     local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
     if car ~= 0 then
@@ -2813,13 +2826,13 @@ function tp_player_car_to_coords(pid, coord)
     end
 end
 
-function tp_all_player_cars_to_coords(coord)
+local function tp_all_player_cars_to_coords(coord)
     for k,pid in pairs(players.list(false, true, true)) do
         tp_player_car_to_coords(pid, coord)
     end
 end
 
-function dispatch_griefer_jesus(target)
+local function dispatch_griefer_jesus(target)
     griefer_jesus = util.create_thread(function(thr)
         util.toast(translations.grief_jesus_sent)
         request_model_load(-835930287)
@@ -2864,67 +2877,14 @@ function dispatch_griefer_jesus(target)
     end)
 end
 
-function dispatch_angry_firefighter(target)
-    angry_firefighter = util.create_thread(function(thr)
-        local p_hash = util.joaat('s_m_y_fireman_01')
-        local v_hash = util.joaat("firetruk")
-        local player_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(target)
-        request_model_load(p_hash)
-        request_model_load(v_hash)
-        local coords = ENTITY.GET_ENTITY_COORDS(player_ped, true)
-        local spawn_pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(player_ped, 0.0, -10.0, 0.0)
-        local vehicle = entities.create_vehicle(v_hash, spawn_pos, ENTITY.GET_ENTITY_HEADING(player_ped))
-        VEHICLE.SET_VEHICLE_SIREN(vehicle, true)
-        local blip = HUD.ADD_BLIP_FOR_ENTITY(vehicle)
-        HUD.SET_BLIP_COLOUR(blip, 61)
-        ENTITY.SET_ENTITY_INVINCIBLE(vehicle, true)
-        ENTITY.SET_ENTITY_INVINCIBLE(ped, true)
-        local ped = entities.create_ped(1, p_hash, spawn_pos, 0.0)
-        PED.SET_PED_INTO_VEHICLE(ped, vehicle, -1)
-        PED.SET_PED_FLEE_ATTRIBUTES(ped, 0, false)
-        PED.SET_PED_COMBAT_ATTRIBUTES(ped, 5, true)
-        PED.SET_PED_COMBAT_ATTRIBUTES(ped, 46, true)
-        TASK.TASK_VEHICLE_SHOOT_AT_PED(ped, player_ped, 1000.0)
-        VEHICLE._SET_VEHICLE_DOORS_LOCKED_FOR_UNK(vehicle, true)
-        VEHICLE.SET_VEHICLE_DOORS_LOCKED(vehicle, true)
-        VEHICLE.SET_VEHICLE_DOORS_LOCKED_FOR_ALL_PLAYERS(vehicle, true)
-        --pretty much just a respawn/rationale check
-        while true do
-            if not ENTITY.IS_ENTITY_UPRIGHT(vehicle, 30) then
-                ENTITY.SET_ENTITY_ROTATION(vehicle, 0, 0, 0, 0) 
-            end
-            local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(target)
-            local player_coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
-            local ped_coords = ENTITY.GET_ENTITY_COORDS(ped, false)
-            TASK.TASK_VEHICLE_SHOOT_AT_PED(ped, target_ped, 1000.0)
-            PED.SET_PED_KEEP_TASK(ped, true)
-            local dist =  MISC.GET_DISTANCE_BETWEEN_COORDS(player_coords['x'], player_coords['y'], player_coords['z'], ped_coords['x'], ped_coords['y'], ped_coords['z'], false)
-            if dist > 50 then
-                local behind = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, -15.0, 0.0, 0.0)
-                ENTITY.SET_ENTITY_COORDS(vehicle, behind['x'], behind['y'], behind['z'], false, false, false, false)
-                TASK.TASK_VEHICLE_SHOOT_AT_PED(ped, target_ped, 1000.0)
-                PED.SET_PED_KEEP_TASK(ped, true)
-            end
-            -- if jesus disappears we can just make another lmao
-            if not ENTITY.DOES_ENTITY_EXIST(ped) then
-                util.stop_thread()
-            end
-            if not players.exists(target) then
-                util.stop_thread()
-            end
-            util.yield(100)
-        end
-    end)
-end
-
-function request_anim_dict(dict)
+local function request_anim_dict(dict)
     while not STREAMING.HAS_ANIM_DICT_LOADED(dict) do
         STREAMING.REQUEST_ANIM_DICT(dict)
         util.yield()
     end
 end
 
-function dispatch_mariachi(target)
+local function dispatch_mariachi(target)
     mariachi_thr = util.create_thread(function()
         local men = {}
         local player_ped
@@ -2951,7 +2911,7 @@ function dispatch_mariachi(target)
 end
 
 givegun = false
-function send_attacker(hash, pid, givegun, num_attackers, atkgun)
+local function send_attacker(hash, pid, givegun, num_attackers, atkgun)
     local this_attacker
     local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, 0.0, -3.0, 0.0)
@@ -2988,7 +2948,7 @@ function send_attacker(hash, pid, givegun, num_attackers, atkgun)
     end
 end
 
-function send_aircraft_attacker(vhash, phash, pid, num_attackers)
+local function send_aircraft_attacker(vhash, phash, pid, num_attackers)
     local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, 1.0, 0.0, 500.0)
     coords.x = coords['x']
@@ -3023,7 +2983,7 @@ function send_aircraft_attacker(vhash, phash, pid, num_attackers)
     end
 end
 
-function send_groundv_attacker(vhash, phash, pid, givegun, num_attackers, atkgun)
+local function send_groundv_attacker(vhash, phash, pid, givegun, num_attackers, atkgun)
     local player_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     request_model_load(vhash)
     local bike_hash = -159126838
@@ -3059,7 +3019,7 @@ function send_groundv_attacker(vhash, phash, pid, givegun, num_attackers, atkgun
     end
 end
 
-function send_attacker_squad(p_hash, v_hash, forcestayinv, godmodeatk, hp, weapon, pid)
+local function send_attacker_squad(p_hash, v_hash, forcestayinv, godmodeatk, hp, weapon, pid)
     local player_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     request_model_load(p_hash)
     request_model_load(v_hash)
@@ -3104,7 +3064,7 @@ function send_attacker_squad(p_hash, v_hash, forcestayinv, godmodeatk, hp, weapo
     end
 end
 
-function send_player_label_sms(label, pid)
+local function send_player_label_sms(label, pid)
     local event_data = {-791892894, players.user(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
     local out = label:sub(1, 127)
     for i = 0, #out -1 do
@@ -3118,7 +3078,7 @@ end
 vehicle_hashes = {util.joaat("dune2"), util.joaat("speedo2"), util.joaat("krieger"), util.joaat("kuruma"), util.joaat('insurgent'), util.joaat('neon'), util.joaat('akula'), util.joaat('alphaz1'), util.joaat('rogue'), util.joaat('oppressor2'), util.joaat('hydra')}
 vehicle_names = {translations.v_1, translations.v_2, translations.v_3, translations.v_4, translations.v_5, translations.v_6, translations.v_7, translations.v_8, translations.v_9, translations.v_10, translations.v_11, translations.custom}
 
-function set_up_player_actions(pid)
+local function set_up_player_actions(pid)
     local childlock
     local atkgun = 0
     menu.divider(menu.player_root(pid), translations.script_name_pretty)
@@ -3129,9 +3089,9 @@ function set_up_player_actions(pid)
     local explosions_root = menu.list(ls_hostile, translations.projectiles_explosions, {translations.projectiles_explosions_cmd}, translations.projectiles_explosions_desc)
     local playerveh_root = menu.list(ls_hostile, translations.vehicle, {translations.p_vehicle_root_cmd}, translations.p_vehicle_root_desc)
     local npctrolls_root = menu.list(ls_hostile, translations.npc_trolling, {translations.npc_trolling_root_cmd}, "")
+    local soundtrolls_root = menu.list(ls_hostile, translations.sound_trolling, {translations.sound_trolling_root_cmd}, "")
     local attackers_root = menu.list(npctrolls_root, translations.attackers, {translations.attackers_root_cmd}, "")
     local chattrolls_root = menu.list(ls_hostile, translations.chat_trolling, {translations.chat_trolling_cmd}, "")
-    local pstats_root = menu.list(ls_hostile, translations.stats, {translations.p_stats_cmd}, "")
 
     ram_root = menu.list(ls_hostile, translations.ram_root, {translations.ram_root_cmd}, "")
 
@@ -3659,25 +3619,22 @@ function set_up_player_actions(pid)
             end
     end)
 
-    local specialatk_options = {translations.griefer_jesus, translations.angry_firefighter, translations.jets, translations.a_10s, translations.cargo_planes, translations.british, translations.clowns, translations.swat_assault, translations.juggernaut_onslaught, translations.motorcycle_gang, translations.helicopter}
+    local specialatk_options = {translations.griefer_jesus, translations.jets, translations.a_10s, translations.cargo_planes, translations.british, translations.clowns, translations.swat_assault, translations.juggernaut_onslaught, translations.motorcycle_gang, translations.helicopter}
     menu.list_action(attackers_root, translations.send_special_attacker, {translations.send_special_attacker_cmd}, "", specialatk_options, function(index, value, click_type)
             pluto_switch index do
                 case 1: 
                     dispatch_griefer_jesus(pid)
                     break
-                case 2: 
-                    dispatch_angry_firefighter(pid)
-                    break
-                case 3:
+                case 2:
                     send_aircraft_attacker(util.joaat('lazer'), -163714847, pid, num_attackers)
                     break
-                case 4: 
+                case 3: 
                     send_aircraft_attacker(1692272545, -163714847, pid, num_attackers)
                     break
-                case 5:
+                case 4:
                     send_aircraft_attacker(util.joaat("cargoplane"), -163714847, pid, num_attackers)
                     break
-                case 6: 
+                case 5: 
                     local hash = 0x9C9EFFD8
                     local player_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
                     request_model_load(hash)
@@ -3700,19 +3657,19 @@ function set_up_player_actions(pid)
                         TASK.TASK_COMBAT_PED(ped, player_ped, 0, 16)
                     end
                     break
-                case 7: 
+                case 6: 
                     send_attacker_squad(71929310, util.joaat("speedo2"), false, godmodeatk, 100.0, -1810795771, pid)
                     break
-                case 8: 
+                case 7: 
                     send_attacker_squad(util.joaat('s_m_y_swat_01'), util.joaat("policet"), false, godmodeatk, 100.0, 2144741730, pid)
                     break
-                case 9:
+                case 8:
                     send_attacker_squad(util.joaat("u_m_y_juggernaut_01"), util.joaat("barracks3"), false, godmodeatk, 4000.0, 1119849093, pid)
                     break
-                case 10: 
+                case 9: 
                     send_groundv_attacker(-159126838, 850468060, pid, true, num_attackers, atkgun)
                     break 
-                case 11:
+                case 10:
                     send_aircraft_attacker(1543134283, util.joaat("mp_m_bogdangoon"), pid, num_attackers)
                     break
             end
@@ -3799,6 +3756,61 @@ function set_up_player_actions(pid)
         dispatch_mariachi(pid)
     end)
 
+    local voice_troll_options = {translations.ponsonbys_diss, translations.kifflom, translations.insult}
+    menu.list_action(soundtrolls_root, translations.voice_trolls, {translations.voice_trolls_cmd}, "", voice_troll_options, function(index, value, click_type)
+        local voice
+        local speech
+        local z_off = 0
+        if PED.IS_PED_IN_ANY_VEHICLE(target_ped, false) then 
+            z_off = get_model_size(ENTITY.GET_ENTITY_MODEL(PED.GET_VEHICLE_PED_IS_IN(target_ped, false))).z
+        end
+        pluto_switch index do
+            case 1:
+                voice = "S_F_M_SHOP_HIGH_WHITE_MINI_01"
+                speech = "BUMP"
+                break
+            case 2:
+                voice = "A_F_M_BEACH_01_WHITE_FULL_01"
+                speech = "KIFFLOM_GREET"
+                break
+            case 3: 
+                voice = ""
+                speech = "GENERIC_INSULT_HIGH_01"
+        end
+        local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, 0.0, -1.0, 0.0+z_off)
+        --AUDIO.PLAY_AMBIENT_SPEECH_FROM_POSITION_NATIVE(speech, voice, coords.x, coords.y, coords.z, "SPEECH_PARAMS_FORCE_SHOUTED")
+        request_model_load(util.joaat("s_f_m_shop_high"))
+        local voice_ped = entities.create_ped(28, util.joaat("s_f_m_shop_high"), coords, 0)
+        ENTITY.SET_ENTITY_COMPLETELY_DISABLE_COLLISION(voice_ped, true, false)
+        ENTITY.SET_ENTITY_ALPHA(voice_ped, 0, false)
+        ENTITY.FREEZE_ENTITY_POSITION(voice_ped, true)
+        ENTITY.SET_ENTITY_INVINCIBLE(voice_ped, true)
+        AUDIO.PLAY_PED_AMBIENT_SPEECH_WITH_VOICE_NATIVE(voice_ped, speech, voice, "SPEECH_PARAMS_FORCE", 0)
+        util.yield(5000)
+        entities.delete(voice_ped)
+    end)
+
+    menu.toggle_loop(soundtrolls_root, translations.laughter_torment, {translations.laughter_torment_cmd}, translations.laughter_torment_desc, function()
+        local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local voice = "A_F_M_EASTSA_01_LATINO_FULL_01"
+        local speech = "FEMALE_DISTANT_LAUGH"
+        local z_off = 0
+        if PED.IS_PED_IN_ANY_VEHICLE(target_ped, false) then 
+            z_off = get_model_size(ENTITY.GET_ENTITY_MODEL(PED.GET_VEHICLE_PED_IS_IN(target_ped, false))).z
+        end
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, 0.0, -1.0, 0.0 + z_off)
+        request_model_load(util.joaat("s_f_m_shop_high"))
+        local voice_ped = entities.create_ped(28, util.joaat("s_f_m_shop_high"), coords, 0)
+        ENTITY.SET_ENTITY_COMPLETELY_DISABLE_COLLISION(voice_ped, true, false)
+        ENTITY.SET_ENTITY_VISIBLE(voice_ped, false, 0)
+        ENTITY.FREEZE_ENTITY_POSITION(voice_ped, true)
+        ENTITY.SET_ENTITY_INVINCIBLE(voice_ped, true)
+        AUDIO.PLAY_PED_AMBIENT_SPEECH_WITH_VOICE_NATIVE(voice_ped, speech, voice, "SPEECH_PARAMS_FORCE", 0)
+        util.yield(3000)
+        entities.delete(voice_ped)
+    end)
+
     menu.action(ls_hostile, translations.cargo_plane_trap, {translations.cargo_plane_trap_cmd}, translations.cargo_plane_trap_desc, function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 0.0, 0.0)
@@ -3816,7 +3828,7 @@ function set_up_player_actions(pid)
         end
     end)
 
-    menu.toggle_loop(ls_hostile, translations.earrape, {translations.earrape_cmd}, translations.earrape_desc, function(click_type)
+    menu.toggle_loop(soundtrolls_root, translations.earrape, {translations.earrape_cmd}, translations.earrape_desc, function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         for i = 1, 20 do
             AUDIO.PLAY_SOUND_FROM_ENTITY(-1, "Bed", ped, "WastedSounds", true, true)
@@ -3928,22 +3940,6 @@ function set_up_player_actions(pid)
             end
         end
     end)
-
-    -- these actions should only run when the user is fully loaded in, i.e for memory stuff
-        while util.is_session_transition_active() or not NETWORK.NETWORK_IS_PLAYER_ACTIVE(pid) do
-            util.yield()
-        end
-        
-        if NETWORK.NETWORK_IS_PLAYER_ACTIVE(pid) then
-                -- thanks vsus
-                pcall(menu.action, pstats_root, translations.lap_dances_received .. tostring(get_lapdances_amount(pid)), {translations.lap_dances_received_cmd}, translations.lap_dances_received_desc, function(click_type)
-                    chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_purchased .. tostring(get_lapdances_amount(pid)) .. translations.lap_dances_in_total, false, true, true)
-                end)
-
-                pcall(menu.action, pstats_root, translations.hookers_bought .. tostring(get_prostitutes_solicited(pid)), {translations.hookers_bought_cmd}, translations.hookers_bought_desc, function(click_type)
-                    chat.send_message(PLAYER.GET_PLAYER_NAME(pid) .. translations.has_solicited .. tostring(get_prostitutes_solicited(pid)) .. translations.hookers_in_total, false, true, true)
-                end)
-        end
 end
 
 broke_blips = {}
@@ -4118,9 +4114,8 @@ menu.toggle(online_root, translations.show_me_whos_using_voicechat, {translation
     mod_uses("player", if on then 1 else -1)
 end)
 
-
-cur_names = {}
 players.on_join(function(pid)
+    ls_log("user joined")
     if players.is_marked_as_admin(pid) then 
         if admin_bail then 
             util.toast("Admin detected! Bailing.")
@@ -4129,10 +4124,10 @@ players.on_join(function(pid)
     end
     if pid ~= players.user() then
         local name = PLAYER.GET_PLAYER_NAME(pid)
-        cur_names[pid+1] = name
     end
     set_up_player_actions(pid)
 end)
+
 players.dispatch_on_join()
 
 players.on_leave(function(pid)
@@ -4186,6 +4181,7 @@ players_thread = util.create_thread(function (thr)
                         end
                     end
                 end
+
                 if christianity then
                     local pc = ENTITY.GET_ENTITY_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid))
                     local scc = {}
