@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.86
+script_version = 7.87
 util.require_natives("1640181023")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -19,6 +19,7 @@ util_alloc = memory.alloc(8)
 
 
 store_dir = filesystem.store_dir() .. '\\lancescript_reloaded\\'
+lyrics_dir = store_dir .. '\\lyrics\\'
 translations_dir = store_dir .. '\\translations\\'
 resources_dir = filesystem.resources_dir() .. '\\lancescript_reloaded\\'
 relative_translations_dir = "./store/lancescript_reloaded/translations/"
@@ -29,6 +30,10 @@ end
 
 if not filesystem.is_dir(translations_dir) then 
     filesystem.mkdirs(translations_dir)
+end
+
+if not filesystem.is_dir(lyrics_dir) then 
+    filesystem.mkdirs(lyrics_dir)
 end
 
 local function table_size(T)
@@ -285,6 +290,20 @@ function request_model_load(hash)
     end
     STREAMING.REQUEST_MODEL(hash)
     while not STREAMING.HAS_MODEL_LOADED(hash) do
+        if os.time() - request_time >= 10 then
+            break
+        end
+        util.yield()
+    end
+end
+
+function request_anim_dict(dict)
+    request_time = os.time()
+    if not STREAMING.DOES_ANIM_DICT_EXIST(dict) then
+        return
+    end
+    STREAMING.REQUEST_ANIM_DICT(dict)
+    while not STREAMING.HAS_ANIM_DICT_LOADED(dict) do
         if os.time() - request_time >= 10 then
             break
         end
@@ -2407,7 +2426,8 @@ supercleanse = menu.action(world_root, translations.super_cleanse, {translations
             ct = ct + 1
         end
         util.toast(translations.super_cleanse_complete .. ct .. translations.entities_removed)
-    end, function(l)
+    end, function()
+        util.toast("Aborted.")
     end, true)
 end)
 
@@ -4044,7 +4064,7 @@ menu.slider(aphostile_root, translations.infibounty_amount, {translations.infibo
 
 
 menu.toggle_loop(aphostile_root, translations.infibounty, {translations.infibounty_cmd}, translations.infibounty_desc, function(click_type)
-    menu.trigger_commands(translations.bountyall_cmd .. tostring(infibounty_amt))
+    menu.trigger_commands(translations.bountyall_cmd .. " " .. tostring(infibounty_amt))
     util.yield(60000)
 end)
 
@@ -4296,6 +4316,41 @@ players_thread = util.create_thread(function (thr)
 end)
 
 -- LANCESCRIPT OPTIONS
+local all_lyric_files = {}
+function update_all_lyric_files()
+    temp_lyrics = {}
+    for i, path in ipairs(filesystem.list_files(lyrics_dir)) do
+        local file_str = path:gsub(lyrics_dir, '')
+        if ends_with(file_str, '.lrc') then
+            temp_lyrics[#temp_lyrics+1] = file_str
+        end
+    end
+    all_lyric_files = temp_lyrics
+end
+update_all_lyric_files()
+
+lyric_select_actions = menu.list_action(lancescript_root, translations.select_lrc_file, {translations.select_lrc_file_cmd}, translations.select_lrc_file_desc, all_lyric_files, function(index, value, click_type)
+    menu.show_warning(lyric_select_actions, click_type, translations.selectlrc_warn, function()
+        local first_file = io.open(lyrics_dir .. '\\' .. value,  'r')
+        local deez_lyrics = first_file:read('*all')
+        first_file:close()
+        local second_file = io.open(filesystem.stand_dir() .. '\\' .. 'Song.lrc', 'w')
+        second_file:write(deez_lyrics)
+        second_file:close()
+        util.toast(value .. translations.loaded)
+    end, function()
+        util.toast("Aborted.")
+    end)
+end)
+
+util.create_thread(function()
+    while true do
+        update_all_lyric_files()
+        menu.set_list_action_options(lyric_select_actions, all_lyric_files)
+        util.yield(5000)
+    end
+end)
+
 menu.toggle(lancescript_root, translations.debug, {translations.debug_cmd}, "", function(on)
     ls_debug = on
 end)
