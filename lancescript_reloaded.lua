@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.87
+script_version = 7.88
 util.require_natives("1640181023")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -216,6 +216,7 @@ ap_root = menu.list(online_root, translations.all_players, {translations.all_pla
 apfriendly_root = menu.list(ap_root, translations.all_players_friendly, {translations.all_players_friendly_cmd}, "")
 aphostile_root = menu.list(ap_root, translations.all_players_hostile, {translations.all_players_hostile_cmd}, "")
 apneutral_root = menu.list(ap_root, translations.all_players_neutral, {translations.all_players_neutral_cmd}, "")
+ap_text_trolls_root = menu.list(apneutral_root, translations.random_joke_loop_sms, {}, "")
 -- END ONLINE SUBSECTIONS
 -- BEGIN ENTITIES SUBSECTION
 entities_root = menu.list(menu.my_root(), translations.entities, {translations.entities_cmd}, translations.entities_desc)
@@ -492,6 +493,7 @@ menu.toggle_loop(chat_presets_root, translations.random_joke_loop, {translations
         util.yield(5000)
     end
 end)
+
 
 
 
@@ -1231,6 +1233,7 @@ end)
 
 -- ## silent aimbot
 silent_aimbotroot = menu.list(combat_root, translations.silent_aimbot, {translations.silent_aimbot_root_cmd}, translations.silent_aimbot_desc)
+anti_aim_root = menu.list(combat_root, translations.anti_aim, {}, translations.anti_aim_desc)
 kill_auraroot = menu.list(combat_root, translations.kill_aura, {translations.kill_aura_root_cmd}, translations.kill_aura_desc)
 weapons_root = menu.list(combat_root, translations.spec_weapons, {translations.spec_weapons_cmd}, translations.spec_weapons_desc)
 
@@ -1246,6 +1249,28 @@ menu.toggle_loop(combat_root, translations._3d_crosshair, {translations._3d_cros
     size.y = 0.5+(dist/50)
     size.z = 0.5+(dist/50)
     GRAPHICS.DRAW_MARKER(3, rc.x, rc.y, rc.z, 0.0, 0.0, 0.0, 0.0, 90.0, 0.0, size.y, 1.0, size.x, 255, 255, 255, 50, false, true, 2, false, 'visualflow', 'crosshair')
+end)
+
+anti_aim = false
+menu.toggle(anti_aim_root, translations.anti_aim, {translations.anti_aim_cmd},  translations.anti_aim_desc, function(on)
+    anti_aim = on
+    mod_uses("player", if on then 1 else -1)
+end)
+
+anti_aim_notify = false
+menu.toggle(anti_aim_root, translations.anti_aim_notify, {translations.anti_aim_notify_cmd},  translations.anti_aim_notify_desc, function(on)
+    anti_aim_notify = on
+end)
+
+anti_aim_angle = 2
+menu.click_slider(anti_aim_root, translations.anti_aim_angle, {translations.anti_aim_angle_cmd}, "", 0, 180, 2, 1, function(s)
+    anti_aim_angle = s
+end)
+
+local anti_aim_types = {"Script event", "Ragdoll", "Explode"}
+local anti_aim_type = 1
+menu.list_select(anti_aim_root, translations.anti_aim_type, {translations.anti_aim_type_cmd}, translations.anti_aim_type_desc,  anti_aim_types, 1, function(index)
+    anti_aim_type = index
 end)
 
 kill_aura = false
@@ -3112,6 +3137,7 @@ local function set_up_player_actions(pid)
     local soundtrolls_root = menu.list(ls_hostile, translations.sound_trolling, {translations.sound_trolling_root_cmd}, "")
     local attackers_root = menu.list(npctrolls_root, translations.attackers, {translations.attackers_root_cmd}, "")
     local chattrolls_root = menu.list(ls_hostile, translations.chat_trolling, {translations.chat_trolling_cmd}, "")
+    local text_trolls_root = menu.list(ls_hostile, translations.player_text_root, {translations.player_text_root_cmd}, "")
 
     ram_root = menu.list(ls_hostile, translations.ram_root, {translations.ram_root_cmd}, "")
 
@@ -3359,6 +3385,14 @@ local function set_up_player_actions(pid)
         end
     end)
 
+    menu.action(playerveh_root, translations.emp_vehicle, {translations.emp_vehicle_cmd}, "", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            local c = ENTITY.GET_ENTITY_COORDS(car)
+            FIRE.ADD_EXPLOSION(c.x, c.y, c.z, 83, 100.0, false, true, 0.0)
+        end
+    end)
+
     menu.action(ls_friendly, translations.p_remove_stickybombs_from_car, {translations.p_remove_stickybombs_from_car_cmd}, "", function(click_type)
         local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
         NETWORK.REMOVE_ALL_STICKY_BOMBS_FROM_ENTITY(car)
@@ -3440,7 +3474,7 @@ local function set_up_player_actions(pid)
     end)
 
     local text_options = {translations.nudes, translations.random_texts}
-    menu.list_action(ls_hostile, translations.text, {translations.text_p_cmd}, "", text_options, function(index, value, click_type)
+    menu.list_action(text_trolls_root, translations.text, {translations.text_p_cmd}, "", text_options, function(index, value, click_type)
         if index == 1 then
             for i=1, #sexts do
                 send_player_label_sms(sexts[i], pid)
@@ -3454,6 +3488,14 @@ local function set_up_player_actions(pid)
         util.toast(translations.texts_submitted)
     end)
 
+    menu.toggle_loop(text_trolls_root, translations.random_joke_loop_sms, {translations.random_joke_loop_sms_cmd}, translations.random_joke_loop_sms_desc, function(click_type)
+        local joke = get_random_joke()
+        if joke ~= "FAIL" then
+            players.send_sms(pid, joke)
+        end
+        util.yield(5000)
+    end)
+        
     local v_model = 'lazer'
     menu.text_input(spawnvehicle_root, translations.give_vehicle_custom_vehicle_model, {translations.give_vehicle_custom_vehicle_model_cmd}, translations.give_vehicle_custom_vehicle_model_desc, function(on_input)
         v_model = on_input
@@ -3848,14 +3890,6 @@ local function set_up_player_actions(pid)
         end
     end)
 
-    menu.toggle_loop(soundtrolls_root, translations.earrape, {translations.earrape_cmd}, translations.earrape_desc, function(click_type)
-        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        for i = 1, 20 do
-            AUDIO.PLAY_SOUND_FROM_ENTITY(-1, "Bed", ped, "WastedSounds", true, true)
-        end
-        util.yield(500)
-    end)
-
     menu.action(ls_hostile, translations.mark_as_angry_planes_target, {translations.mark_as_angry_planes_target_cmd}, translations.mark_as_angry_planes_target_desc, function(on_input)
         angry_planes_tar = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if not angry_planes then
@@ -3977,13 +4011,6 @@ menu.toggle(aphostile_root, translations.broke_radar, {translations.broke_radar_
     end
 end)
 
-earrape_all = false
-menu.toggle(aphostile_root, translations.earrape, {translations.earrape_all_cmd}, translations.earrape_desc, function(on)
-    earrape_all = on
-    mod_uses("player", if on then 1 else -1)
-end)
-
-
 broke_threshold = 1000000
 menu.slider(aphostile_root, translations.broke_threshold, {translations.broke_threshold_cmd}, translations.broke_threshold_desc, 100000, 1000000000, 1000000, 100000, function(s)
     broke_threshold = s
@@ -4010,7 +4037,7 @@ menu.toggle(ap_root, translations.delete_armed_vehicles, {translations.delete_ar
 end)
 
 local text_options = {translations.nudes, translations.random_texts}
-menu.list_action(apneutral_root, translations.text, {translations.text_all_cmd}, "", text_options, function(index, value, click_type)
+menu.list_action(ap_text_trolls_root, translations.text, {translations.text_all_cmd}, "", text_options, function(index, value, click_type)
     for k,pid in pairs(players.list(false, true, true)) do
         if index == 1 then
             for i=1, #sexts do
@@ -4024,6 +4051,16 @@ menu.list_action(apneutral_root, translations.text, {translations.text_all_cmd},
         end
     end
     util.toast(translations.texts_submitted)
+end)
+
+menu.toggle_loop(ap_text_trolls_root, translations.random_joke_loop_sms, {translations.ap_random_joke_loop_sms_cmd}, translations.random_joke_loop_sms_desc, function(click_type)
+    local joke = get_random_joke()
+    for k,v in pairs(players.list(false, true, true)) do
+        if joke ~= "FAIL" then
+            players.send_sms(v, joke)
+        end
+    end
+    util.yield(5000)
 end)
 
 
@@ -4202,6 +4239,33 @@ players_thread = util.create_thread(function (thr)
                     end
                 end
 
+                if anti_aim then 
+                    local c1 = players.get_position(pid)
+                    local c2 =  players.get_position(players.user())
+                    local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+                    if PED.IS_PED_FACING_PED(ped, players.user_ped(), anti_aim_angle) 
+                        and ENTITY.HAS_ENTITY_CLEAR_LOS_TO_ENTITY(ped, players.user_ped(), 17)
+                            and MISC.GET_DISTANCE_BETWEEN_COORDS(c1.x, c1.y, c1.z, c2.x, c2.y, c2.z) < 1000 
+                                and WEAPON.GET_SELECTED_PED_WEAPON(ped) ~= -1569615261 
+                                    and PED.GET_PED_CONFIG_FLAG(ped, 78, true) then
+                        pluto_switch anti_aim_type do 
+                            case 1: 
+                                util.trigger_script_event(1 << pid, {-1388926377, 4, -1762807505, 0})
+                                break
+                            case 2: 
+                                local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), 0.0, 0.0, 2.8)
+                                FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 70, 100.0, false, true, 0.0)
+                                break
+                            case 3:
+                                menu.trigger_commands("kill " .. PLAYER.GET_PLAYER_NAME(pid))
+                                break
+                        end
+                        if anti_aim_notify then
+                            util.toast(PLAYER.GET_PLAYER_NAME(pid) .. translations.is_aiming_at_you)
+                        end
+                    end
+                end
+
                 if christianity then
                     local pc = ENTITY.GET_ENTITY_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid))
                     local scc = {}
@@ -4211,13 +4275,6 @@ players_thread = util.create_thread(function (thr)
                     local dist = MISC.GET_DISTANCE_BETWEEN_COORDS(scc['x'], scc['y'], scc['z'], pc['x'], pc['y'], pc['z'], true)
                     if dist <= 10 then
                         FIRE.ADD_EXPLOSION(pc['x'], pc['y'], pc['z'], 12, 100.0, true, false, 0.0)
-                    end
-                end
-                if earrape_all then
-                    local this_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-                    util.toast(PLAYER.GET_PLAYER_NAME(pid))
-                    for i = 1, 20 do
-                        AUDIO.PLAY_SOUND_FROM_ENTITY(-1, "Bed", this_ped, "WastedSounds", true, true)
                     end
                 end
                 if protected_areas_on then
