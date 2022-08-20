@@ -994,7 +994,7 @@ driveonair = false
 ls_driveonair = menu.toggle(my_vehicle_movement_root, translations.drive_on_air, {translations.drive_on_air_cmd}, "", function(on)
     driveonair = on
     if on then
-        local pos = ENTITY.GET_ENTITY_COORDS(players.user_ped(), true)
+        local pos = players.get_position(players.user())
         doa_ht = pos['z']
         util.toast(translations.drive_on_air_instructions)
         if driveonwater then
@@ -1141,7 +1141,7 @@ menu.click_slider(my_vehicle_root, translations.stack_vertically, {translations.
             local mdl = ENTITY.GET_ENTITY_MODEL(player_cur_car)
             local size = get_model_size(mdl)
             local r = ENTITY.GET_ENTITY_ROTATION(old_veh, 0)
-            new_veh = entities.create_vehicle(mdl, ENTITY.GET_ENTITY_COORDS(players.user_ped(), true), ENTITY.GET_ENTITY_HEADING(old_veh))
+            new_veh = entities.create_vehicle(mdl, players.get_position(players.user()), ENTITY.GET_ENTITY_HEADING(old_veh))
             ENTITY.ATTACH_ENTITY_TO_ENTITY(new_veh, old_veh, 0, 0.0, 0.0, size.z, 0.0, 0.0, 0.0, true, false, falsmy_e, false, 0, true)
             old_veh = new_veh
         end
@@ -1156,9 +1156,9 @@ menu.click_slider(my_vehicle_root, translations.stack_horizontally, {translation
             local mdl = ENTITY.GET_ENTITY_MODEL(main_veh)
             local size = get_model_size(mdl)
             local r = ENTITY.GET_ENTITY_ROTATION(main_veh, 0)
-            left_new = entities.create_vehicle(mdl, ENTITY.GET_ENTITY_COORDS(players.user_ped(), true), ENTITY.GET_ENTITY_HEADING(main_veh))
+            left_new = entities.create_vehicle(mdl, players.get_position(players.user()), ENTITY.GET_ENTITY_HEADING(main_veh))
             ENTITY.ATTACH_ENTITY_TO_ENTITY(left_new, main_veh, 0, -size.x*i, 0.0, 0.0, 0.0, 0.0, 0.0, true, false, false, false, 0, true)
-            right_new = entities.create_vehicle(mdl, ENTITY.GET_ENTITY_COORDS(players.user_ped(), true), ENTITY.GET_ENTITY_HEADING(main_veh))
+            right_new = entities.create_vehicle(mdl, players.get_position(players.user()), ENTITY.GET_ENTITY_HEADING(main_veh))
             ENTITY.ATTACH_ENTITY_TO_ENTITY(right_new, main_veh, 0, size.x*i, 0.0, 0.0, 0.0, 0.0, 0.0, true, false, false, false, 0, true)
         end
     end
@@ -1241,7 +1241,7 @@ weapons_root = menu.list(combat_root, translations.spec_weapons, {translations.s
 menu.toggle_loop(combat_root, translations._3d_crosshair, {translations._3d_crosshair_cmd}, translations._3d_crosshair_cmd, function(on)
     request_texture_dict_load('visualflow')
     local rc = raycast_gameplay_cam(-1, 10000.0)[2]
-    local c = ENTITY.GET_ENTITY_COORDS(players.user_ped(), true)
+    local c = players.get_position(players.user())
     local dist = MISC.GET_DISTANCE_BETWEEN_COORDS(rc.x, rc.y, rc.z, c.x, c.y, c.z, false)
     local dir = v3.toDir(CAM.GET_GAMEPLAY_CAM_ROT(0))
     size = {}
@@ -1337,7 +1337,7 @@ local function get_aimbot_target()
     -- an aimbot should have immaculate response time so we shouldnt rely on the other entity pools for this data
     for k,v in pairs(entities.get_all_peds_as_handles()) do
         local target_this = true
-        local player_pos = ENTITY.GET_ENTITY_COORDS(players.user_ped(), true)
+        local player_pos = players.get_position(players.user())
         local ped_pos = ENTITY.GET_ENTITY_COORDS(v, true)
         local this_dist = MISC.GET_DISTANCE_BETWEEN_COORDS(player_pos['x'], player_pos['y'], player_pos['z'], ped_pos['x'], ped_pos['y'], ped_pos['z'], true)
         if players.user_ped() ~= v and not ENTITY.IS_ENTITY_DEAD(v) then
@@ -1365,7 +1365,7 @@ local function get_aimbot_target()
                 end
             end
             if satarget_nogodmode then
-                if not ENTITY._GET_ENTITY_CAN_BE_DAMAGED(v) then 
+                if not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(v) then 
                     target_this = false 
                 end
             end
@@ -2116,7 +2116,7 @@ menu.toggle(v_phys_root, translations.vehicle_blackhole, {translations.vehicle_b
     blackhole = on
     mod_uses("vehicle", if on then 1 else -1)
     if on then
-        holecoords = ENTITY.GET_ENTITY_COORDS(players.user_ped(), true)
+        holecoords = players.get_position(players.user())
         util.toast(translations.vehicle_blackhole_reposition)
     end
 end)
@@ -3148,7 +3148,7 @@ local function set_up_player_actions(pid)
             local c = {}
             pluto_switch index do
                 case 1:
-                    c = ENTITY.GET_ENTITY_COORDS(players.user_ped(), true)
+                    c = players.get_position(players.user())
                     break
                 case 2: 
                     c = get_waypoint_coords()
@@ -4591,7 +4591,7 @@ while true do
                         else
                             ggc1 = raycast_coord[2]
                         end
-                        local c2 = ENTITY.GET_ENTITY_COORDS(players.user_ped(), true)
+                        local c2 = players.get_position(players.user())
                         local dist = MISC.GET_DISTANCE_BETWEEN_COORDS(ggc1['x'], ggc1['y'], ggc1['z'], c2['x'], c2['y'], c2['z'], true)
                         -- safety
                         if not lastdist or dist < lastdist then 
