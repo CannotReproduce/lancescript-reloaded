@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.99
+script_version = 7.91
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
