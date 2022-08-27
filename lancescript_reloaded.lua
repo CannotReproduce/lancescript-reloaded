@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.89
+script_version = 7.99
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -305,6 +305,17 @@ function request_anim_dict(dict)
     end
     STREAMING.REQUEST_ANIM_DICT(dict)
     while not STREAMING.HAS_ANIM_DICT_LOADED(dict) do
+        if os.time() - request_time >= 10 then
+            break
+        end
+        util.yield()
+    end
+end
+
+function request_ptfx_asset(asset)
+    local request_time = os.time()
+    STREAMING.REQUEST_NAMED_PTFX_ASSET(asset)
+    while not STREAMING.HAS_NAMED_PTFX_ASSET_LOADED(asset) do
         if os.time() - request_time >= 10 then
             break
         end
@@ -930,6 +941,7 @@ end, function(on_command)
     end
 end)
 
+
 menu.toggle(self_root, translations.burning_man, {translations.burning_man_cmd}, translations.burning_man_desc, function(on)
     ped_flags[430] = on
     if on then
@@ -1234,6 +1246,7 @@ end)
 -- ## silent aimbot
 silent_aimbotroot = menu.list(combat_root, translations.silent_aimbot, {translations.silent_aimbot_root_cmd}, translations.silent_aimbot_desc)
 anti_aim_root = menu.list(combat_root, translations.anti_aim, {}, translations.anti_aim_desc)
+triggerbot_root = menu.list(combat_root, translations.triggerbot, {}, translations.triggerbot_desc)
 kill_auraroot = menu.list(combat_root, translations.kill_aura, {translations.kill_aura_root_cmd}, translations.kill_aura_desc)
 weapons_root = menu.list(combat_root, translations.spec_weapons, {translations.spec_weapons_cmd}, translations.spec_weapons_desc)
 
@@ -1272,6 +1285,28 @@ local anti_aim_type = 1
 menu.list_select(anti_aim_root, translations.anti_aim_type, {translations.anti_aim_type_cmd}, translations.anti_aim_type_desc,  anti_aim_types, 1, function(index)
     anti_aim_type = index
 end)
+
+triggerbot_delay = 100
+
+local ent_alloc = memory.alloc_int()
+menu.toggle_loop(triggerbot_root, translations.triggerbot, {translations.triggerbot_cmd},  translations.triggerbot_desc, function(on)
+    PLAYER.GET_ENTITY_PLAYER_IS_FREE_AIMING_AT(players.user(), ent_alloc)
+    if memory.read_int(ent_alloc) ~= 0 then 
+        local ent = memory.read_int(ent_alloc)
+        if ENTITY.GET_ENTITY_TYPE(ent) == 1 and PLAYER.IS_PLAYER_FREE_AIMING_AT_ENTITY(players.user(), ent) then
+            if PED.GET_PED_CONFIG_FLAG(players.user_ped(), 78, true) then  
+                PAD._SET_CONTROL_NORMAL(2, 24, 1.0)
+                util.yield(triggerbot_delay)
+                PAD._SET_CONTROL_NORMAL(2, 24, 0.0)
+            end
+        end
+    end
+end)
+
+menu.click_slider(triggerbot_root, translations.triggerbot_delay, {}, translations.triggerbot_delay_desc, 10, 5000, 100, 1, function(s)
+    triggerbot_delay = s
+end)
+
 
 kill_aura = false
 menu.toggle(kill_auraroot, translations.kill_aura, {translations.kill_aura_cmd},  translations.kill_aura_desc, function(on)
@@ -2293,10 +2328,55 @@ menu.toggle(pickups_root, translations.teleport_all_pickups, {translations.telep
 end)
 
 -- WORLD
+fireworks_root = menu.list(world_root, translations.fireworks, {}, "")
 protected_areas_root = menu.list(world_root, translations.protected_areas, {translations.protected_areas_cmd}, translations.protected_areas_desc)
 projectiles_root = menu.list(world_root, translations.projectiles, {translations.projectiles_cmd}, "")
 entity_limits_root = menu.list(protections_root, translations.entity_limits, {translations.entity_limits_cmd}, translations.entity_limits_desc)
 active_protected_areas_root = menu.list(protected_areas_root, translations.active_areas, {translations.active_areas_cmd},  translations.active_areas_desc)
+
+local placed_firework_boxes = {}
+
+menu.action(fireworks_root, translations.place_firework_box, {translations.place_firework_box_cmd}, translations.place_firework_box_desc, function(click_type)
+    local animlib = 'anim@mp_fireworks'
+    local ptfx_asset = "scr_indep_fireworks"
+    local anim_name = 'place_firework_3_box'
+    local effect_name = "scr_indep_firework_trailburst"
+    request_anim_dict(animlib)
+    local pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(players.user_ped(), 0.0, 0.52, 0.0)
+    local ped = players.user_ped()
+    ENTITY.FREEZE_ENTITY_POSITION(ped, true)
+    TASK.TASK_PLAY_ANIM(ped, animlib, anim_name, -1, -8.0, 3000, 0, 0, false, false, false)
+    util.yield(1500)
+    local firework_box = entities.create_object(util.joaat('ind_prop_firework_03'), pos, true, false, false)
+    local firework_box_pos = ENTITY.GET_ENTITY_COORDS(firework_box)
+    OBJECT.PLACE_OBJECT_ON_GROUND_PROPERLY(firework_box)
+    ENTITY.FREEZE_ENTITY_POSITION(ped, false)
+    util.yield(1000)
+    ENTITY.FREEZE_ENTITY_POSITION(firework_box, true)
+    placed_firework_boxes[#placed_firework_boxes + 1] = firework_box
+end)
+
+menu.action(fireworks_root, translations.set_off_fireworks, {translations.set_off_fireworks_cmd}, translations.set_off_fireworks_desc, function(click_type)
+    if #placed_firework_boxes == 0 then 
+        util.toast("Place some fireworks first!")
+        return 
+    end
+    local ptfx_asset = "scr_indep_fireworks"
+    local effect_name = "scr_indep_firework_trailburst"
+    request_ptfx_asset(ptfx_asset)
+    util.toast(translations.kaboom)
+    for i=1, 50 do
+        for k,box in pairs(placed_firework_boxes) do 
+            GRAPHICS.USE_PARTICLE_FX_ASSET(ptfx_asset)
+            GRAPHICS.START_NETWORKED_PARTICLE_FX_NON_LOOPED_ON_ENTITY(effect_name, box, 0.0, 0.0, 0.0, 0.0, 180.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+            util.yield(100)
+        end
+    end
+    for k,box in pairs(placed_firework_boxes) do 
+        entities.delete(box)
+        placed_firework_boxes[box] = nil
+    end
+end)
 
 projectile_warn = false
 menu.toggle(projectiles_root, translations.draw_warning, {translations.draw_warning_cmd}, translations.draw_warning_desc, function(on)
@@ -3814,6 +3894,24 @@ local function set_up_player_actions(pid)
         ENTITY.FREEZE_ENTITY_POSITION(cage2, true)
     end)
 
+    menu.action(ls_hostile, translations.spawn_arena, {translations.spawn_arena_cmd}, translations.spawn_arena_desc, function(click_type)
+        local coords = players.get_position(pid)
+        local hash = util.joaat("xs_terrain_set_dystopian_06")
+        request_model_load(hash)
+        local dust = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z']-4, true, false, false)
+        ENTITY.FREEZE_ENTITY_POSITION(dust, true)
+    end)
+
+    
+    menu.action(ls_hostile, translations.spawn_brazil, {translations.spawn_brazil_cmd}, translations.spawn_brazil_desc, function(click_type)
+        local coords = players.get_position(pid)
+        local hash = util.joaat("xs_terrain_dyst_ground_07")
+        request_model_load(hash)
+        local dust = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z']-36, true, false, false)
+        ENTITY.FREEZE_ENTITY_POSITION(dust, true)
+    end)
+
+
     menu.action(npctrolls_root, translations.summon_mariachi_band, {translations.summon_mariachi_band_cmd}, translations.summon_mariachi_band_desc, function(click_type)
         dispatch_mariachi(pid)
     end)
@@ -4470,6 +4568,8 @@ while true do
             VEHICLE.SET_VEHICLE_NUMBER_PLATE_TEXT(player_cur_car, speed .. " " .. mph_unit)
         end
     end
+
+
 
     -- "dow block" is an invisible platform that is continuously teleported under the vehicle/player for the illusion
     -- sometimes other players see this. sometimes they don't.
