@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 7.91
+script_version = 8.00
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -144,7 +144,6 @@ online_v = tonumber(NETWORK._GET_ONLINE_VERSION())
 if online_v > ocoded_for then
     util.toast(translations.outdated_script_1 .. online_v .. translations.outdated_script_2 .. ocoded_for .. translations.outdated_script_3)
 end
-
 lancescript_logo = directx.create_texture(resources_dir .. 'lancescript_logo.png')
 -- logo display
 if SCRIPT_MANUAL_START then
@@ -168,9 +167,9 @@ if SCRIPT_MANUAL_START then
         starttime = os.clock()
         local alpha = 0
         while true do
-            directx.draw_texture(lancescript_logo, 0.14, 0.14, 0.5, 0.5, 0.5, 0.5, 0, 1, 1, 1, logo_alpha)
+            directx.draw_texture(lancescript_logo, 0.10, 0.10, 0.5, 0.5, 0.5, 0.5, 0, 1, 1, 1, logo_alpha)
             timepassed = os.clock() - starttime
-            if timepassed > 3 then
+            if timepassed > 1 then
                 logo_alpha_incr = -0.01
             end
             if logo_alpha == 0 then
@@ -820,9 +819,6 @@ local function spawn_object_in_front_of_ped(ped, hash, ang, room, zoff, setongro
     coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, room, zoff)
     request_model_load(hash)
     hdng = ENTITY.GET_ENTITY_HEADING(ped)
-    coords.x = coords['x']
-    coords.y = coords['y']
-    coords.z = coords['z']
     new = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
     ENTITY.SET_ENTITY_HEADING(new, hdng+ang)
     if setonground then
@@ -1203,9 +1199,6 @@ menu.action(my_vehicle_root, translations.tesla_summon, {translations.tesla_summ
     if lastcar ~= 0 then
         local plyr = PLAYER.PLAYER_PED_ID()
         local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(plyr, 0.0, 5.0, 0.0)
-        coords.x = coords['x']
-        coords.y = coords['y']
-        coords.z = coords['z']
         local phash = -67533719
         request_model_load(phash)
         tesla_ped = entities.create_ped(32, phash, coords, ENTITY.GET_ENTITY_HEADING(plyr))
@@ -1222,6 +1215,94 @@ menu.action(my_vehicle_root, translations.tesla_summon, {translations.tesla_summ
 end)
 --SET_RADIO_TRACK
 
+
+function set_vehicle_handling_value(veh, offset, value)
+    local v_ptr = entities.handle_to_pointer(veh)
+    local handling = memory.read_long(v_ptr + 0x938)
+    memory.write_float(handling + offset, value)
+end
+
+-- i used some offsets from nowiry so credit to them
+
+function set_vehicle_into_drift_mode(veh)
+    util.toast(translations.initial_d_alert)
+    set_vehicle_handling_value(veh, 0x0C, 1900.0) -- fmass
+    set_vehicle_handling_value(veh, 0x20, 0.0) -- vec com off x
+    set_vehicle_handling_value(veh, 0x24, 0.0) -- vec com off y
+    set_vehicle_handling_value(veh, 0x28, 0.0) -- vec com off z
+    set_vehicle_handling_value(veh, 0x30, 1.0) -- vec inertia mult x
+    set_vehicle_handling_value(veh, 0x34, 1.0) -- vec inertia mult y
+    set_vehicle_handling_value(veh, 0x38, 1.0) -- vec inertia mult z
+    set_vehicle_handling_value(veh, 0x10, 15.5) -- initial drag coeff
+    set_vehicle_handling_value(veh, 0x40, 85.0) -- percent submerged
+    set_vehicle_handling_value(veh, 0x48, 0.0) -- drive bias front
+    set_vehicle_handling_value(veh, 0x50, 0.0) -- initial drive gears
+    set_vehicle_handling_value(veh, 0x60, 1.9) -- initial drive force
+    set_vehicle_handling_value(veh, 0x54, 1.0) -- fdrive interia
+    set_vehicle_handling_value(veh, 0x58, 5.0) -- clutch change rate scale up
+    set_vehicle_handling_value(veh, 0x5C, 5.0) -- clutch change rate scale down
+    set_vehicle_handling_value(veh, 0x68, 200.0) -- initial drive max flat vel
+    set_vehicle_handling_value(veh, 0x6C, 4.85) --  brake force
+    set_vehicle_handling_value(veh, 0x74, 0.67) -- brake bias front
+    set_vehicle_handling_value(veh, 0x7C, 3.5) -- handbrake force
+    set_vehicle_handling_value(veh, 0x80, 1.2) -- steering lock
+    set_vehicle_handling_value(veh, 0x88, 1.0) -- traction curve max
+    set_vehicle_handling_value(veh, 0x88, 1.45) -- traction curve min
+    set_vehicle_handling_value(veh, 0x98, 35.0) -- traction curve lateral
+    set_vehicle_handling_value(veh, 0xA0, 0.15) -- traction curve spring delta max
+    set_vehicle_handling_value(veh, 0xA8, 0.5) -- low speed traction loss mult
+    set_vehicle_handling_value(veh, 0xAC, 0.0) -- camber stiffness
+    set_vehicle_handling_value(veh, 0xB0, 0.45) -- traction bias front
+    set_vehicle_handling_value(veh, 0xB8, 1.0) -- traction loss mult
+    set_vehicle_handling_value(veh, 0xBC, 2.8) -- suspension force
+    set_vehicle_handling_value(veh, 0xC0, 1.4) -- suspension comp damp
+    set_vehicle_handling_value(veh, 0xC4, 2.2) -- suspension rebound damp
+    set_vehicle_handling_value(veh, 0xC8, 0.06) -- suspension upper limit
+    set_vehicle_handling_value(veh, 0xCC, -0.05) -- suspension lower limit
+    set_vehicle_handling_value(veh, 0xBC, 2.8) -- suspension force
+    set_vehicle_handling_value(veh, 0xD0, 0.0) -- suspension raise
+    set_vehicle_handling_value(veh, 0xD4, 0.5) -- suspension bias front
+end
+
+initial_d_mode = false
+initial_d_score = true
+function on_user_change_vehicle(vehicle)
+    if vehicle ~= 0 then
+        if initial_d_mode then 
+            set_vehicle_into_drift_mode(vehicle)
+        end
+    end
+end
+
+function initial_d_score_thread()
+    util.create_thread(function()
+        local drift_score = 0
+        local is_drifting = false
+        while true do
+            if not initial_d_mode or not initial_d_score then 
+                util.stop_thread()
+            end
+            if player_cur_car ~= 0 and PED.IS_PED_IN_ANY_VEHICLE(players.user_ped(), true) then 
+                if math.abs(ENTITY.GET_ENTITY_SPEED_VECTOR(player_cur_car, true).x) > 2 then 
+                    is_drifting = true
+                    drift_score = drift_score + 1
+                    local c = ENTITY.GET_ENTITY_COORDS(player_cur_car)
+                    c.z = c.z + 0.3
+                    local score_pos = world_to_screen_coords(c.x, c.y, c.z)
+                    directx.draw_text(score_pos.x, score_pos.y, "DRIFT SCORE: " .. tostring(drift_score), 5, 1, {r=1, g= 0.5, b = 0.4, a = 100}, true)
+                else
+                    if is_drifting then
+                        is_drifting = false
+                        util.toast("TOTAL DRIFT SCORE: " .. drift_score)
+                    end
+                    drift_score = 0
+                end
+            end
+            util.yield()
+        end
+    end)
+end
+
 menu.toggle_loop(my_vehicle_movement_root, translations.hold_shift_to_drift, {translations.hold_shift_to_drift_cmd}, translations.hold_shift_to_drift_desc, function(on)
     if PAD.IS_CONTROL_PRESSED(21, 21) then
         VEHICLE.SET_VEHICLE_REDUCE_GRIP(player_cur_car, true)
@@ -1230,6 +1311,18 @@ menu.toggle_loop(my_vehicle_movement_root, translations.hold_shift_to_drift, {tr
         VEHICLE.SET_VEHICLE_REDUCE_GRIP(player_cur_car, false)
     end
 end)
+
+menu.toggle(my_vehicle_movement_root, translations.initial_d_mode, {translations.initial_d_mode_cmd}, translations.initial_d_mode_desc, function(on, click_type)
+    initial_d_mode = on
+    initial_d_score_thread()
+    if player_cur_car ~= 0 then 
+        set_vehicle_into_drift_mode(player_cur_car)
+    end
+end)
+
+ menu.toggle(my_vehicle_movement_root, translations.initial_d_score, {}, "", function(on, click_type)
+    initial_d_score = on
+end, true)
 
 menu.toggle_loop(my_vehicle_movement_root, translations.horn_boost, {translations.horn_boost_cmd}, translations.horn_boost_desc, function(on)
     if player_cur_car ~= 0 then
@@ -1242,12 +1335,71 @@ end)
 
 -- COMBAT
 -- COMBAT-RELATED toggles, actions, and functionality
+function get_player_ptr()
+    return entities.handle_to_pointer(players.user_ped())
+end
+
+function get_player_info()
+    return memory.read_long(get_player_ptr() + 0x10C8)
+end
+
+function get_weapon_base()
+    return memory.read_long(get_player_ptr() + 0x10D8)
+end
+
+function get_gun_ptr()
+    return memory.read_long(get_weapon_base() + 0x20)
+end
 
 -- ## silent aimbot
 silent_aimbotroot = menu.list(combat_root, translations.silent_aimbot, {translations.silent_aimbot_root_cmd}, translations.silent_aimbot_desc)
 anti_aim_root = menu.list(combat_root, translations.anti_aim, {}, translations.anti_aim_desc)
 triggerbot_root = menu.list(combat_root, translations.triggerbot, {}, translations.triggerbot_desc)
 kill_auraroot = menu.list(combat_root, translations.kill_aura, {translations.kill_aura_root_cmd}, translations.kill_aura_desc)
+
+
+weapon_settings = menu.list(combat_root, translations.weapon_settings, {translations.weapon_settings_cmd}, "")
+
+custom_weapon_spread = 0.000
+menu.toggle_loop(weapon_settings, translations.custom_spread, {translations.custom_spread_cmd}, "", function(toggle)
+    memory.write_float(get_gun_ptr() + 0x74, custom_weapon_spread)
+    memory.write_float(get_gun_ptr() + 0x124, custom_weapon_spread)
+end)
+
+
+menu.slider_float(weapon_settings, translations.custom_spread_2, {translations.custom_spread_float_cmd}, "", 0, 1000, 0, 1, function(s)
+    custom_weapon_spread = s * 0.001
+end)
+
+custom_weapon_recoil = 0.000
+menu.toggle_loop(weapon_settings, translations.custom_recoil, {translations.custom_recoil_cmd}, "", function(toggle)
+    memory.write_float(get_gun_ptr() + 0x2F4, custom_weapon_recoil)
+end)
+
+menu.slider_float(weapon_settings, translations.custom_recoil_2, {translations.custom_recoil_float_cmd}, "", 0, 1000, 0, 1, function(s)
+    custom_weapon_spread = s * 0.001
+end)
+
+custom_weapon_muzzle_velocity = 10000.000
+menu.toggle_loop(weapon_settings, translations.custom_muzzle_vel, {translations.custom_muzzle_vel_cmd}, "", function(toggle)
+    memory.write_float(get_gun_ptr() + 0x11C, custom_weapon_muzzle_velocity)
+end)
+
+menu.slider_float(weapon_settings, translations.custom_muzzle_vel_2, {translations.custom_muzzle_vel_float_cmd}, "", 0, 1000000, 1000000, 1, function(s)
+    custom_weapon_spread = s * 0.001
+end)
+
+custom_reload_multiplier = 1.00
+menu.toggle_loop(weapon_settings, translations.custom_reload_multiplier, {translations.custom_reload_multiplier_cmd}, "", function(toggle)
+    memory.write_float(get_gun_ptr() + 0x134, custom_reload_multiplier)
+end)
+
+
+menu.slider_float(weapon_settings, translations.custom_reload_multiplier_2, {translations.custom_reload_multiplier_float_cmd}, "", 0, 10000, 100, 1, function(s)
+    custom_reload_multiplier = (s * 0.01)
+    util.toast(custom_reload_multiplier)
+end)
+
 weapons_root = menu.list(combat_root, translations.spec_weapons, {translations.spec_weapons_cmd}, translations.spec_weapons_desc)
 
 -- preload the textures
@@ -1788,9 +1940,6 @@ ped_spawn = menu.list(peds_root, translations.ped_spawn, {translations.ped_spawn
 num_peds_spawn = 1
 local function spawn_ped(hash)
     coords = ENTITY.GET_ENTITY_COORDS(players.user_ped(), false)
-    coords.x = coords['x']
-    coords.y = coords['y']
-    coords.z = coords['z']
     local peds_spawned = {}
     request_model_load(hash)
     for i=1, num_peds_spawn do
@@ -2715,9 +2864,12 @@ menu.text_input(fakemessages_root, translations.custom_suspension_date, {transla
 end, "July 15, 2000")
 
 local custom_alert = translations.initial_custom_alert
-menu.text_input(fakemessages_root, translations.custom_alert_text, {translations.custom_alert_text_cmd}, translations.custom_alert_text_desc, function(on_input)
-    custom_alert = on_input
-end, "hello world")
+menu.action(fakemessages_root, translations.input_custom_alert, {translations.input_custom_alert_cmd}, "", function(on_click)
+    util.toast(translations.input_custom_alert_toast)
+    menu.show_command_box(translations.input_custom_alert_cmd .. " ")
+end, function(on_command)
+    show_custom_alert_until_enter(on_command)
+end)
 
 
 alert_options = {translations.fake_alert_1, translations.fake_alert_2, translations.fake_alert_3, translations.fake_alert_4, translations.fake_alert_5, translations.custom}
@@ -2885,9 +3037,6 @@ local function attachto(offx, offy, offz, pid, angx, angy, angz, hash, bone, isn
     local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     local bone = PED.GET_PED_BONE_INDEX(ped, bone)
     local coords = ENTITY.GET_ENTITY_COORDS(ped, true)
-    coords.x = coords['x']
-    coords.y = coords['y']
-    coords.z = coords['z']
     if isnpc then
         obj = entities.create_ped(1, hash, coords, 90.0)
     elseif isveh then
@@ -2963,9 +3112,6 @@ local function dispatch_griefer_jesus(target)
         request_model_load(-835930287)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(target)
         coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
-        coords.x = coords['x']
-        coords.y = coords['y']
-        coords.z = coords['z']
         local jesus = entities.create_ped(1, -835930287, coords, 90.0)
         ENTITY.SET_ENTITY_INVINCIBLE(jesus, true)
         PED.SET_PED_HEARING_RANGE(jesus, 9999)
@@ -3040,9 +3186,6 @@ local function send_attacker(hash, pid, givegun, num_attackers, atkgun)
     local this_attacker
     local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, 0.0, -3.0, 0.0)
-    coords.x = coords['x']
-    coords.y = coords['y']
-    coords.z = coords['z']
     if hash ~= 'CLONE' then
         request_model_load(hash)
     end
@@ -3050,7 +3193,7 @@ local function send_attacker(hash, pid, givegun, num_attackers, atkgun)
         if hash ~= 'CLONE' then
             this_attacker = entities.create_ped(28, hash, coords, math.random(0, 270))
         else
-            this_attacker = PED.CLONE_PED(target_ped, true, true, true)
+            this_attacker = PED.CLONE_PED(target_ped, true, false, true)
         end
         local blip = HUD.ADD_BLIP_FOR_ENTITY(this_attacker)
         HUD.SET_BLIP_COLOUR(blip, 61)
@@ -3076,9 +3219,6 @@ end
 local function send_aircraft_attacker(vhash, phash, pid, num_attackers)
     local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, 1.0, 0.0, 500.0)
-    coords.x = coords['x']
-    coords.y = coords['y']
-    coords.z = coords['z']
     request_model_load(vhash)
     request_model_load(phash)
     for i=1, num_attackers do
@@ -3496,8 +3636,6 @@ local function set_up_player_actions(pid)
         end
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
-        coords.x = coords['x']
-        coords.y = coords['y']
         coords.z = coords['z'] + 20.0
         request_model_load(hash)
         local veh = entities.create_vehicle(hash, coords, 0.0)
@@ -3658,8 +3796,6 @@ local function set_up_player_actions(pid)
     menu.action(ls_hostile, translations.chop_up, {translations.chop_up_cmd}, translations.chop_up_desc, function(click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
-        coords.x = coords['x']
-        coords.y = coords['y']
         coords.z = coords['z']+2.5
         local hash = util.joaat("buzzard")
         request_model_load(hash)
@@ -3782,13 +3918,7 @@ local function set_up_player_actions(pid)
                     request_model_load(hash)
                     request_model_load(util.joaat("prop_flag_uk"))
                     local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(player_ped, 0.0, 2.0, 0.0)
-                    coords.x = coords['x']
-                    coords.y = coords['y']
-                    coords.z = coords['z']
                     for i=1, 5 do
-                        coords.x = coords['x']
-                        coords.y = coords['y']
-                        coords.z = coords['z']
                         local ped = entities.create_ped(28, hash, coords, 30.0)
                         local obj = OBJECT.CREATE_OBJECT_NO_OFFSET(util.joaat("prop_flag_uk"), coords['x'], coords['y'], coords['z'], true, false, false)
                         ENTITY.ATTACH_ENTITY_TO_ENTITY(obj, ped, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false, false, true, false, 0, true)
@@ -3854,9 +3984,6 @@ local function set_up_player_actions(pid)
     menu.action(npctrolls_root, translations.cat_explosion, {translations.cat_explosion_cmd}, translations.cat_explosion_desc, function(click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
-        coords.x = coords['x']
-        coords.y = coords['y']
-        coords.z = coords['z']
         hash = util.joaat("a_c_cat_01")
         request_model_load(hash)
         for i=1, 30 do
@@ -3880,18 +4007,15 @@ local function set_up_player_actions(pid)
     --SET_VEHICLE_WHEEL_HEALTH(Vehicle vehicle, int wheelIndex, float health)
     menu.action(ls_hostile, translations.cage, {translations.cage_cmd}, "", function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local coords = ENTITY.GET_ENTITY_COORDS(ped, true)
-        coords.x = coords['x']
-        coords.y = coords['y']
-        coords.z = coords['z']
-        local hash = util.joaat("prop_ld_container")
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 0.0, 0.0)
+        local hash = util.joaat("prop_test_elevator")
         request_model_load(hash)
-        local cage1 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z']-3, true, false, false)
-        ENTITY.SET_ENTITY_ROTATION(cage1, -90.0, 0.0, 0.0, 1, true)
-        local cage2 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
-        ENTITY.SET_ENTITY_ROTATION(cage2, 90.0, 0.0, 0.0, 1, true)
+        local cage1 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
         ENTITY.FREEZE_ENTITY_POSITION(cage1, true)
+        ENTITY.SET_ENTITY_ROTATION(cage1, 0.0, 0.0, 0.0, 1, true)
+        local cage2 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
         ENTITY.FREEZE_ENTITY_POSITION(cage2, true)
+        ENTITY.SET_ENTITY_ROTATION(cage2, 0.0, 0.0, 90.0, 1, true)
     end)
 
     menu.action(ls_hostile, translations.spawn_arena, {translations.spawn_arena_cmd}, translations.spawn_arena_desc, function(click_type)
@@ -3974,9 +4098,6 @@ local function set_up_player_actions(pid)
     menu.action(ls_hostile, translations.cargo_plane_trap, {translations.cargo_plane_trap_cmd}, translations.cargo_plane_trap_desc, function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 0.0, 0.0)
-        coords.x = coords['x']
-        coords.y = coords['y']
-        coords.z = coords['z']
         local hash = util.joaat("cargoplane")
         request_model_load(hash)
         local cargo = entities.create_vehicle(hash, coords, ENTITY.GET_ENTITY_HEADING(ped))
@@ -4015,7 +4136,7 @@ local function set_up_player_actions(pid)
     end)
 
     menu.action(npctrolls_root, translations.clone, {translations.clone_cmd}, translations.clone_desc, function(click_type)
-        local new_clone = PED.CLONE_PED(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true, true, true)
+        local new_clone = PED.CLONE_PED(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true, false, true)
     end)
 
     local custom_hooker_options = {translations.clone_player, translations.lester, translations.tracy}
@@ -4024,7 +4145,7 @@ local function set_up_player_actions(pid)
         local c
         pluto_switch index do
             case 1:
-                hooker = PED.CLONE_PED(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true, true, true)
+                hooker = PED.CLONE_PED(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true, false, true)
                 break
             case 2:
                 c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), -5.0, 0.0, 0.0)
@@ -4277,6 +4398,11 @@ players.on_join(function(pid)
             menu.trigger_commands("quittosp")
         end
     end
+
+    if players.get_rockstar_id(pid) == 212591971 then
+        util.toast(players.get_name(pid) .. " is either the real Lance, or someone spoofing. Say hi regardless! :)")
+    end
+
     if pid ~= players.user() then
         local name = PLAYER.GET_PLAYER_NAME(pid)
     end
@@ -4510,6 +4636,10 @@ menu.toggle(lancescript_root, translations.debug, {translations.debug_cmd}, "", 
     ls_debug = on
 end)
 
+menu.toggle(lancescript_root, translations.show_logo_on_start, {}, "", function(on)
+    show_logo_on_start = on
+end, true)
+
 menu.list_action(lancescript_root, translations.select_lang, {translations.select_langcmd}, "", just_translation_files, function(index, value, click_type)
     local file = io.open(selected_lang_path, 'w')
     file:write(value)
@@ -4548,14 +4678,20 @@ is_loading = false
 chat.on_message(function(packet_sender, message_sender, text, team_chat)
 end)
 
+local last_car = 0
 -- ## MAIN TICK LOOP ## --
 while true do
+    player_cur_car = entities.get_user_vehicle_as_handle()
+    if last_car ~= player_cur_car and player_cur_car ~= 0 then 
+        on_user_change_vehicle(player_cur_car)
+        last_car = player_cur_car
+    end
+
     for k,v in pairs(ped_flags) do
         if v ~= nil and v then
             PED.SET_PED_CONFIG_FLAG(players.user_ped(), k, true)
         end
     end
-    player_cur_car = entities.get_user_vehicle_as_handle()
     -- MY VEHICLE LOOP SHIT
     if mph_plate then
         if player_cur_car ~= 0 then
@@ -4780,9 +4916,6 @@ while true do
                     local hash = 0x9C9EFFD8
                     request_model_load(hash)
                     local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ent, -2.0, 0.0, 0.0)
-                    coords.x = coords['x']
-                    coords.y = coords['y']
-                    coords.z = coords['z']
                     local ped = entities.create_ped(28, hash, coords, 30.0)
                     PED.SET_PED_INTO_VEHICLE(ped, ent, -1)
                     ENTITY.SET_ENTITY_INVINCIBLE(ped, true)
