@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.00
+script_version = 8.10
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
@@ -16,7 +16,6 @@ handle_ptr = memory.alloc(13*8)
 player_cur_car = 0
 good_guns = {0, 453432689, 171789620, 487013001, -1716189206, 1119849093}
 util_alloc = memory.alloc(8)
-
 
 store_dir = filesystem.store_dir() .. '\\lancescript_reloaded\\'
 lyrics_dir = store_dir .. '\\lyrics\\'
@@ -144,9 +143,9 @@ online_v = tonumber(NETWORK._GET_ONLINE_VERSION())
 if online_v > ocoded_for then
     util.toast(translations.outdated_script_1 .. online_v .. translations.outdated_script_2 .. ocoded_for .. translations.outdated_script_3)
 end
-lancescript_logo = directx.create_texture(resources_dir .. 'lancescript_logo.png')
 -- logo display
 if SCRIPT_MANUAL_START then
+    lancescript_logo = directx.create_texture(resources_dir .. 'lancescript_logo.png')
     AUDIO.PLAY_SOUND(-1, "OPEN_WINDOW", "LESTER1A_SOUNDS", 0, 0, 1)
     logo_alpha = 0
     logo_alpha_incr = 0.01
@@ -185,6 +184,8 @@ end
 self_root = menu.list(menu.my_root(), translations.me, {translations.me_cmd}, translations.me_desc)
 my_vehicle_root = menu.list(self_root, translations.my_vehicle, {translations.my_vehicle_cmd}, translations.my_vehicle_desc)
 combat_root = menu.list(self_root, translations.combat, {translations.combat_cmd}, translations.combat_desc)
+custom_fov_root = menu.list(combat_root, translations.custom_fov, {translations.custom_fov_cmd}, translations.custom_fov_desc)
+
 -- END SELF SUBSECTIONS
 -- BEGIN ONLINE SUBSECTIONS
 online_root = menu.list(menu.my_root(), translations.online, {translations.online_cmd}, translations.online_desc)
@@ -282,6 +283,99 @@ local function mod_uses(type, incr)
 end
 
 -- UTILTITY FUNCTIONS
+
+local function exportstring( s )
+    return string.format("%q", s)
+end
+
+function table.save(  tbl,filename )
+   local charS,charE = "   ","\n"
+   local file,err = io.open( filename, "wb" )
+   if err then return err end
+   -- initiate variables for save procedure
+   local tables,lookup = { tbl },{ [tbl] = 1 }
+   file:write( "return {"..charE )
+   for idx,t in ipairs( tables ) do
+      file:write( "-- Table: {"..idx.."}"..charE )
+      file:write( "{"..charE )
+      local thandled = {}
+      for i,v in ipairs( t ) do
+         thandled[i] = true
+         local stype = type( v )
+         -- only handle value
+         if stype == "table" then
+            if not lookup[v] then
+               table.insert( tables, v )
+               lookup[v] = #tables
+            end
+            file:write( charS.."{"..lookup[v].."},"..charE )
+         elseif stype == "string" then
+            file:write(  charS..exportstring( v )..","..charE )
+         elseif stype == "number" then
+            file:write(  charS..tostring( v )..","..charE )
+         end
+      end
+      for i,v in pairs( t ) do
+         -- escape handled values
+         if (not thandled[i]) then
+            local str = ""
+            local stype = type( i )
+            -- handle index
+            if stype == "table" then
+               if not lookup[i] then
+                  table.insert( tables,i )
+                  lookup[i] = #tables
+               end
+               str = charS.."[{"..lookup[i].."}]="
+            elseif stype == "string" then
+               str = charS.."["..exportstring( i ).."]="
+            elseif stype == "number" then
+               str = charS.."["..tostring( i ).."]="
+            end
+            if str ~= "" then
+               stype = type( v )
+               -- handle value
+               if stype == "table" then
+                  if not lookup[v] then
+                     table.insert( tables,v )
+                     lookup[v] = #tables
+                  end
+                  file:write( str.."{"..lookup[v].."},"..charE )
+               elseif stype == "string" then
+                  file:write( str..exportstring( v )..","..charE )
+               elseif stype == "number" then
+                  file:write( str..tostring( v )..","..charE )
+               end
+            end
+         end
+      end
+      file:write( "},"..charE )
+   end
+   file:write( "}" )
+   file:close()
+end
+
+function table.load( sfile )
+   local ftables,err = loadfile( sfile )
+   if err then return _,err end
+   local tables = ftables()
+   for idx = 1,#tables do
+      local tolinki = {}
+      for i,v in pairs( tables[idx] ) do
+         if type( v ) == "table" then
+            tables[idx][i] = tables[v[1]]
+         end
+         if type( i ) == "table" and tables[i[1]] then
+            table.insert( tolinki,{ i,tables[i[1]] } )
+         end
+      end
+      -- link indices
+      for _,v in ipairs( tolinki ) do
+         tables[idx][v[2]],tables[idx][v[1]] =  tables[idx][v[1]],nil
+      end
+   end
+   return tables[1]
+end
 
 function request_model_load(hash)
     request_time = os.time()
@@ -487,6 +581,28 @@ menu.action(chat_presets_root, translations.dox, {}, translations.dox_desc, func
     chat.send_message("${name}: ${ip} | ${geoip.city}, ${geoip.region}, ${geoip.country}", false, true, true)
 end)
 
+function fake_chat_with_percentage_and_target(action)
+    chat.send_message(action .. " ${name}. [||||            ] (25%)", false, true, true)
+    util.yield(math.random(500, 3000))
+    chat.send_message(action .. " ${name}. [||||||||        ] (50%)", false, true, true)
+    util.yield(math.random(500, 3000))
+    chat.send_message(action .. " ${name}. [||||||||||||    ] (75%)", false, true, true)
+    util.yield(math.random(500, 3000))
+    chat.send_message(action .. " ${name}. [||||||||||||||| ] (89%)", false, true, true)
+    util.yield(math.random(3000, 5000))
+end
+
+menu.action(chat_presets_root, translations.fake_crash, {}, translations.fake_crash_desc, function(click_type)
+    fake_chat_with_percentage_and_target(translations.crashing)
+    chat.send_message(translations.failed_to_crash .. " ${name}. " .. translations.reason_unknown, false, true, true)
+end)
+
+menu.action(chat_presets_root, translations.fake_hack, {}, translations.fake_hack_desc, function(click_type)
+    fake_chat_with_percentage_and_target(translations.hacking)
+    chat.send_message(translations.failed_to_hack .. " ${name}. " .. translations.reason_unknown, false, true, true)
+end)
+
+
 menu.action(chat_presets_root, translations.random_joke, {translations.random_joke_cmd}, translations.random_joke_desc, function(click_type)
     local joke = get_random_joke()
     if joke ~= "FAIL" then
@@ -577,15 +693,6 @@ blue = to_rgb(0.0,0.0,1.0,1.0)
 
 
 -- RAYCAST SHIT
-
--- credits to nowiry
-
-local function get_entity_owner(entity)
-	local pEntity = entities.handle_to_pointer(entity)
-	local addr = memory.read_long(pEntity + 0xD0)
-	return (addr ~= 0) and memory.read_byte(addr + 0x49) or -1
-end
-
 
 local function interpolate(y0, y1, perc)
 	perc = perc > 1.0 and 1.0 or perc
@@ -723,7 +830,7 @@ local function set_player_into_suitable_seat(ent)
     local driver = VEHICLE.GET_PED_IN_VEHICLE_SEAT(ent, -1)
     if not PED.IS_PED_A_PLAYER(driver) or driver == 0 then
         if driver ~= 0 then
-            entities.delete(driver)
+            entities.delete_by_handle(driver)
         end
         PED.SET_PED_INTO_VEHICLE(players.user_ped(), ent, -1)
     else
@@ -1213,8 +1320,25 @@ menu.action(my_vehicle_root, translations.tesla_summon, {translations.tesla_summ
         TASK.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(tesla_ped, lastcar, coords['x'], coords['y'], coords['z'], 300.0, 786996, 5)
     end
 end)
+
+
+menu.toggle_loop(my_vehicle_root, translations.horn_spam, {translations.horn_spam_cmd}, "", function(toggle)
+    if player_cur_car ~= 0 and  PED.IS_PED_IN_ANY_VEHICLE(players.user_ped(), true) then
+        VEHICLE.SET_VEHICLE_MOD(player_cur_car, 14, math.random(0, 51), false)
+        PAD._SET_CONTROL_NORMAL(2, 86, 1.0)
+        util.yield(50)
+        PAD._SET_CONTROL_NORMAL(2, 86, 0.0)
+    end
+end)
+
+
 --SET_RADIO_TRACK
 
+function get_vehicle_handling_value(veh, offset)
+    local v_ptr = entities.handle_to_pointer(veh)
+    local handling = memory.read_long(v_ptr + 0x938)
+    return memory.read_float(handling + offset)
+end
 
 function set_vehicle_handling_value(veh, offset, value)
     local v_ptr = entities.handle_to_pointer(veh)
@@ -1224,44 +1348,52 @@ end
 
 -- i used some offsets from nowiry so credit to them
 
+local last_vehicle_handling_data = {}
 function set_vehicle_into_drift_mode(veh)
+    local handling_values = {
+        [0x0C] = 1900.0, -- fmass
+        [0x20] = 0.0, -- vec com off x
+        [0x24] = 0.0, -- vec com off y
+        [0x28] = 0.0, -- vec com off z
+        [0x30] = 1.0, -- vec inertia mult x
+        [0x34] = 1.0, -- vec inertia mult y
+        [0x38] = 1.0, -- vec inertia mult z
+        [0x10] = 15.5, -- initial drag coeff
+        [0x40] = 85.0, -- percent submerged
+        [0x48] = 0.0,-- drive bias front
+        [0x50] = 0.0,-- initial drive gears
+        [0x60] = 1.9,-- initial drive force
+        [0x54] = 1.0,-- fdrive interia
+        [0x58] = 5.0,-- clutch change rate scale up
+        [0x5C] = 5.0,-- clutch change rate scale down
+        [0x68] = 200.0, -- initial drive max flat vel
+        [0x6C] = 4.85, --  brake force
+        [0x74] = 0.67, -- brake bias front
+        [0x7C] = 3.5, -- handbrake force
+        [0x80] = 1.2, -- steering lock
+        [0x88] = 1.0, -- traction curve max
+        [0x88] = 1.45, -- traction curve min
+        [0x98] = 35.0, -- traction curve lateral
+        [0xA0] = 0.15, -- traction curve spring delta max
+        [0xA8] = 0.0, -- low speed traction loss mult
+        [0xAC] = 0.0, -- camber stiffness
+        [0xB0] = 0.45, -- traction bias front
+        [0xB8] = 1.0, -- traction loss mult
+        [0xBC] = 2.8, -- suspension force
+        [0xC0] = 1.4, -- suspension comp damp
+        [0xC4] = 2.2, -- suspension rebound damp
+        [0xC8] = 0.06, -- suspension upper limit
+        [0xCC] = -0.05, -- suspension lower limit
+        [0xBC] = 2.8, -- suspension force
+        [0xD0] = 0.0, -- suspension raise
+        [0xD4] = 0.5, -- suspension bias front
+        [0xD4] = 0.5, -- suspension bias front
+    }
+    for offset, value in pairs(handling_values) do 
+        last_vehicle_handling_data[offset] = get_vehicle_handling_value(veh, offset)
+        set_vehicle_handling_value(veh, offset, value)
+    end
     util.toast(translations.initial_d_alert)
-    set_vehicle_handling_value(veh, 0x0C, 1900.0) -- fmass
-    set_vehicle_handling_value(veh, 0x20, 0.0) -- vec com off x
-    set_vehicle_handling_value(veh, 0x24, 0.0) -- vec com off y
-    set_vehicle_handling_value(veh, 0x28, 0.0) -- vec com off z
-    set_vehicle_handling_value(veh, 0x30, 1.0) -- vec inertia mult x
-    set_vehicle_handling_value(veh, 0x34, 1.0) -- vec inertia mult y
-    set_vehicle_handling_value(veh, 0x38, 1.0) -- vec inertia mult z
-    set_vehicle_handling_value(veh, 0x10, 15.5) -- initial drag coeff
-    set_vehicle_handling_value(veh, 0x40, 85.0) -- percent submerged
-    set_vehicle_handling_value(veh, 0x48, 0.0) -- drive bias front
-    set_vehicle_handling_value(veh, 0x50, 0.0) -- initial drive gears
-    set_vehicle_handling_value(veh, 0x60, 1.9) -- initial drive force
-    set_vehicle_handling_value(veh, 0x54, 1.0) -- fdrive interia
-    set_vehicle_handling_value(veh, 0x58, 5.0) -- clutch change rate scale up
-    set_vehicle_handling_value(veh, 0x5C, 5.0) -- clutch change rate scale down
-    set_vehicle_handling_value(veh, 0x68, 200.0) -- initial drive max flat vel
-    set_vehicle_handling_value(veh, 0x6C, 4.85) --  brake force
-    set_vehicle_handling_value(veh, 0x74, 0.67) -- brake bias front
-    set_vehicle_handling_value(veh, 0x7C, 3.5) -- handbrake force
-    set_vehicle_handling_value(veh, 0x80, 1.2) -- steering lock
-    set_vehicle_handling_value(veh, 0x88, 1.0) -- traction curve max
-    set_vehicle_handling_value(veh, 0x88, 1.45) -- traction curve min
-    set_vehicle_handling_value(veh, 0x98, 35.0) -- traction curve lateral
-    set_vehicle_handling_value(veh, 0xA0, 0.15) -- traction curve spring delta max
-    set_vehicle_handling_value(veh, 0xA8, 0.5) -- low speed traction loss mult
-    set_vehicle_handling_value(veh, 0xAC, 0.0) -- camber stiffness
-    set_vehicle_handling_value(veh, 0xB0, 0.45) -- traction bias front
-    set_vehicle_handling_value(veh, 0xB8, 1.0) -- traction loss mult
-    set_vehicle_handling_value(veh, 0xBC, 2.8) -- suspension force
-    set_vehicle_handling_value(veh, 0xC0, 1.4) -- suspension comp damp
-    set_vehicle_handling_value(veh, 0xC4, 2.2) -- suspension rebound damp
-    set_vehicle_handling_value(veh, 0xC8, 0.06) -- suspension upper limit
-    set_vehicle_handling_value(veh, 0xCC, -0.05) -- suspension lower limit
-    set_vehicle_handling_value(veh, 0xBC, 2.8) -- suspension force
-    set_vehicle_handling_value(veh, 0xD0, 0.0) -- suspension raise
-    set_vehicle_handling_value(veh, 0xD4, 0.5) -- suspension bias front
 end
 
 initial_d_mode = false
@@ -1316,7 +1448,13 @@ menu.toggle(my_vehicle_movement_root, translations.initial_d_mode, {translations
     initial_d_mode = on
     initial_d_score_thread()
     if player_cur_car ~= 0 then 
-        set_vehicle_into_drift_mode(player_cur_car)
+        if on then
+            set_vehicle_into_drift_mode(player_cur_car)
+        else
+            for offset, value in pairs(last_vehicle_handling_data) do
+                set_vehicle_handling_value(player_cur_car, offset, value)
+            end
+        end
     end
 end)
 
@@ -1357,6 +1495,144 @@ anti_aim_root = menu.list(combat_root, translations.anti_aim, {}, translations.a
 triggerbot_root = menu.list(combat_root, translations.triggerbot, {}, translations.triggerbot_desc)
 kill_auraroot = menu.list(combat_root, translations.kill_aura, {translations.kill_aura_root_cmd}, translations.kill_aura_desc)
 
+-- custom fov
+local current_weapon
+local last_weapon
+
+local default_fov = -6
+local custom_weapon_fovs
+local custom_fov_config_path = store_dir .. 'custom_weapon_fov.lua'
+if filesystem.exists(custom_fov_config_path) then
+    custom_weapon_fovs = table.load(custom_fov_config_path)
+else
+    custom_weapon_fovs = {
+        ads = {
+        },
+        tp_on_foot = {
+        },
+        fp_on_foot = {
+        },
+        fp_in_veh = {
+        },
+        tp_in_veh = {
+        }
+    }
+end
+
+local was_last_weapon_custom_fov = false
+local current_fov = -6
+
+local use_custom_weapon_fov = false
+menu.toggle(custom_fov_root,  translations.use_custom_weapon_fov, {}, "", function(on)
+    use_custom_weapon_fov = on
+end)
+
+local custom_ads_fov_slider = menu.slider(custom_fov_root, translations.ads_fov_for_this_weapon, {translations.ads_fov_for_this_weapon_cmd}, "", -6, 300, default_fov, 1, function(s, prev, click_type)
+    custom_weapon_fovs.ads[current_weapon] = s
+    if use_custom_weapon_fov then
+        menu.trigger_commands("fovaiming " .. s)
+    end
+    table.save(custom_weapon_fovs, custom_fov_config_path)
+end)
+
+local custom_wep_tp_fov_slider = menu.slider(custom_fov_root, translations.tp_on_foot_fov_for_this_weapon, {translations.tp_on_foot_fov_for_this_weapon_cmd}, "", -6, 300, default_fov, 1, function(s, prev, click_type)
+    custom_weapon_fovs.tp_on_foot[current_weapon] = s
+    if use_custom_weapon_fov then
+        menu.trigger_commands("fovtponfoot " .. s)
+    end
+    table.save(custom_weapon_fovs, custom_fov_config_path)
+end)
+
+local custom_wep_fp_fov_slider = menu.slider(custom_fov_root, translations.fp_on_foot_fov_for_this_weapon, {translations.fp_on_foot_fov_for_this_weapon_cmd}, "", -6, 300, default_fov, 1, function(s, prev, click_type)
+    custom_weapon_fovs.fp_on_foot[current_weapon] = s
+    if use_custom_weapon_fov then
+        menu.trigger_commands("fovfponfoot " .. s)
+    end
+    table.save(custom_weapon_fovs, custom_fov_config_path)
+end)
+
+
+local custom_wep_fp_in_veh_fov_slider = menu.slider(custom_fov_root, translations.fp_in_veh_fov_for_this_weapon, {translations.fp_in_veh_fov_for_this_weapon_cmd}, "", -6, 300, default_fov, 1, function(s, prev, click_type)
+    custom_weapon_fovs.fp_in_veh[current_weapon] = s
+    if use_custom_weapon_fov then
+        menu.trigger_commands("fovfpinveh " .. s)
+    end
+    table.save(custom_weapon_fovs, custom_fov_config_path)
+end)
+
+local custom_wep_tp_in_veh_fov_slider = menu.slider(custom_fov_root, translations.tp_in_veh_fov_for_this_weapon, {translations.tp_in_veh_fov_for_this_weapon_cmd}, "", -6, 300, default_fov, 1, function(s, prev, click_type)
+    custom_weapon_fovs.tp_in_veh[current_weapon] = s
+    if use_custom_weapon_fov then
+        menu.trigger_commands("fovtpinveh " .. s)
+    end
+    table.save(custom_weapon_fovs, custom_fov_config_path)
+end)
+
+local custom_sniper_fov_slider = menu.slider(custom_fov_root, translations.custom_sniper_fov, {translations.custom_sniper_fov_cmd}, "", -6, 300, default_fov, 1, function(s, prev, click_type)
+    menu.trigger_commands("fovsniping " .. s)
+end)
+
+
+-- fov handler
+last_weapon = 0
+util.create_thread(function()
+    while true do 
+            -- custom fov loop
+        current_weapon = WEAPON.GET_SELECTED_PED_WEAPON(players.user_ped())
+        -- on weapon change
+        if current_weapon ~= last_weapon then 
+            last_weapon = current_weapon
+            if use_custom_weapon_fov then
+                if custom_weapon_fovs.ads[current_weapon] ~= nil then
+                    menu.set_value(custom_ads_fov_slider, custom_weapon_fovs.ads[current_weapon])
+                    menu.trigger_commands("fovaiming " .. custom_weapon_fovs.ads[current_weapon])
+                    current_aiming_fov = custom_weapon_fovs.ads[current_weapon]
+                else
+                    menu.set_value(custom_ads_fov_slider, default_fov)
+                    menu.trigger_commands("fovaiming -6")
+                end
+            
+                if custom_weapon_fovs.tp_on_foot[current_weapon] ~= nil then
+                    menu.set_value(custom_wep_tp_fov_slider, custom_weapon_fovs.tp_on_foot[current_weapon])
+                    menu.trigger_commands("fovtponfoot " .. custom_weapon_fovs.tp_on_foot[current_weapon])
+                    current_tponfoot_fov = custom_weapon_fovs.tp_on_foot[current_weapon]
+                else
+                    menu.set_value(custom_wep_tp_fov_slider, default_fov)
+                    menu.trigger_commands("fovtponfoot -6")
+                end
+            
+                if custom_weapon_fovs.fp_on_foot[current_weapon] ~= nil then
+                    menu.set_value(custom_wep_fp_fov_slider, custom_weapon_fovs.fp_on_foot[current_weapon])
+                    menu.trigger_commands("fovfponfoot " .. custom_weapon_fovs.fp_on_foot[current_weapon])
+                    current_fponfoot_fov = custom_weapon_fovs.fp_on_foot[current_weapon]
+                else
+                    menu.set_value(custom_wep_fp_fov_slider, default_fov)
+                    menu.trigger_commands("fovfponfoot -6")
+                end
+            
+                --custom_wep_fp_in_veh_fov_slider
+                if custom_weapon_fovs.fp_in_veh[current_weapon] ~= nil then
+                    menu.set_value(custom_wep_fp_in_veh_fov_slider, custom_weapon_fovs.fp_in_veh[current_weapon])
+                    menu.trigger_commands("fovfpinveh " .. custom_weapon_fovs.fp_in_veh[current_weapon])
+                    current_fpinveh_fov = custom_weapon_fovs.fp_in_veh[current_weapon]
+                else
+                    menu.set_value(custom_wep_fp_in_veh_fov_slider, default_fov)
+                    menu.trigger_commands("fovfpinveh -6")
+                end
+            
+                if custom_weapon_fovs.tp_in_veh[current_weapon] ~= nil then
+                    menu.set_value(custom_wep_tp_in_veh_fov_slider, custom_weapon_fovs.tp_in_veh[current_weapon])
+                    menu.trigger_commands("fovtpinveh " .. custom_weapon_fovs.tp_in_veh[current_weapon])
+                    current_tpinveh_fov = custom_weapon_fovs.tp_in_veh[current_weapon]
+                else
+                    menu.set_value(custom_wep_tp_in_veh_fov_slider, default_fov)
+                    menu.trigger_commands("fovtpinveh -6")
+                end
+            end
+        end
+        util.yield()
+    end
+end)
 
 weapon_settings = menu.list(combat_root, translations.weapon_settings, {translations.weapon_settings_cmd}, "")
 
@@ -1726,7 +2002,7 @@ objects_thread = util.create_thread(function (thr)
                         GRAPHICS.DRAW_SPRITE('visualflow', 'crosshair', screen_c.x, screen_c.y, 0.02, 0.03, 0.0, 255, 0, 0, 255, true, 0)
                     end
                     if projectile_cleanse then 
-                        entities.delete(obj)
+                        entities.delete_by_handle(obj)
                     end
                     if projectile_spaz then
                         --local target = entity.get_entity_owner(obj) 
@@ -1750,7 +2026,7 @@ objects_thread = util.create_thread(function (thr)
                 if l_e_o_on then
                     local size = get_model_size(ENTITY.GET_ENTITY_MODEL(obj))
                     if size.x > l_e_max_x or size.y > l_e_max_y or size.z > l_e_max_y then
-                        entities.delete(obj)
+                        entities.delete_by_handle(obj)
                     end
                 end
                 if object_rainbow then
@@ -2238,7 +2514,7 @@ menu.action(vehicles_root, translations.teleport_into_closest_vehicle, {translat
         PED.SET_PED_INTO_VEHICLE(players.user_ped(), closestveh, -1)
     else
         if not PED.IS_PED_A_PLAYER(driver) then
-            entities.delete(driver)
+            entities.delete_by_handle(driver)
             PED.SET_PED_INTO_VEHICLE(players.user_ped(), closestveh, -1)
         elseif VEHICLE.ARE_ANY_VEHICLE_SEATS_FREE(closestveh) then
             for i=0, 10 do
@@ -2344,7 +2620,7 @@ vehicles_thread = util.create_thread(function (thr)
                 if l_e_v_on then
                     local size = get_model_size(ENTITY.GET_ENTITY_MODEL(veh))
                     if size.x > l_e_max_x or size.y > l_e_max_y or size.z > l_e_max_y then
-                        entities.delete(veh)
+                        entities.delete_by_handle(veh)
                     end
                 end
 
@@ -2522,7 +2798,7 @@ menu.action(fireworks_root, translations.set_off_fireworks, {translations.set_of
         end
     end
     for k,box in pairs(placed_firework_boxes) do 
-        entities.delete(box)
+        entities.delete_by_handle(box)
         placed_firework_boxes[box] = nil
     end
 end)
@@ -2666,17 +2942,17 @@ supercleanse = menu.action(world_root, translations.super_cleanse, {translations
     menu.show_warning(supercleanse, click_type, translations.super_cleanse_warn, function()
         local ct = 0
         for k,ent in pairs(entities.get_all_vehicles_as_handles()) do
-            entities.delete(ent)
+            entities.delete_by_handle(ent)
             ct = ct + 1
         end
         for k,ent in pairs(entities.get_all_peds_as_handles()) do
             if not PED.IS_PED_A_PLAYER(ent) then
-                entities.delete(ent)
+                entities.delete_by_handle(ent)
             end
             ct = ct + 1
         end
         for k,ent in pairs(entities.get_all_objects_as_handles()) do
-            entities.delete(ent)
+            entities.delete_by_handle(ent)
             ct = ct + 1
         end
         util.toast(translations.super_cleanse_complete .. ct .. translations.entities_removed)
@@ -2749,6 +3025,34 @@ end)
 
 -- TWEAKS
 fakemessages_root = menu.list(tweaks_root, translations.fake_alerts, {translations.fake_alerts_cmd}, translations.fake_alerts_desc)
+fakemoney_root = menu.list(tweaks_root, translations.fake_money, {translations.fake_money_cmd}, translations.fake_money_desc)
+
+fakemoney_delay = 3000
+menu.slider(fakemoney_root, translations.fake_money_delay, {translations.fake_money_delay_cmd}, "", 100, 10000, 3000, 1, function(s)
+    fakemoney_delay = s
+end)
+
+fakemoney_amt = 30000000
+menu.slider(fakemoney_root, translations.fake_money_amount, {translations.fake_money_amt_cmd}, "", 0, 1000000000, 30000000, 1, function(s)
+    fakemoney_amt = s
+end)
+
+fakemoney_random = true
+menu.toggle(fakemoney_root, translations.fake_money_random, {}, "", function(on)
+    fakemoney_random = on
+end, true)
+
+
+menu.toggle_loop(fakemoney_root, translations.fake_money_loop, {}, "", function(on)
+    local amt
+    if fakemoney_random then 
+        amt = math.random(10000000, 30000000)
+    else
+        amt = fakemoney_amt
+    end
+    HUD.CHANGE_FAKE_MP_CASH(0, amt)
+    util.yield(fakemoney_delay)
+end)
 
 menu.action(tweaks_root, translations.force_cutscene, {translations.force_cutscene_cmd}, translations.force_cutscene_desc, function(click_type)
     util.toast(translations.type_cutscene_name)
@@ -3475,7 +3779,7 @@ local function set_up_player_actions(pid)
 
     menu.action(playerveh_root, translations.delete_vehicle, {translations.delete_vehicle_cmd}, "", function(click_type)
         local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
-        entities.delete(car)
+        entities.delete_by_handle(car)
     end)
 
     childlock = menu.toggle_loop(playerveh_root, translations.child_lock, {translations.child_lock_cmd}, "", function()
@@ -3602,6 +3906,14 @@ local function set_up_player_actions(pid)
             local vel = ENTITY.GET_ENTITY_VELOCITY(car)
             ENTITY.SET_ENTITY_ROTATION(car, rot['x'], rot['y']+180, rot['z'], 0, true)
             ENTITY.SET_ENTITY_VELOCITY(car, -vel['x'], -vel['y'], vel['z'])
+        end
+    end)
+
+    menu.action(playerveh_root, translations.turn_engine_off, {translations.turn_engine_off_cmd}, "", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            VEHICLE.SET_VEHICLE_ENGINE_ON(car, false, true, false)
         end
     end)
 
@@ -4072,7 +4384,7 @@ local function set_up_player_actions(pid)
         ENTITY.SET_ENTITY_INVINCIBLE(voice_ped, true)
         AUDIO.PLAY_PED_AMBIENT_SPEECH_WITH_VOICE_NATIVE(voice_ped, speech, voice, "SPEECH_PARAMS_FORCE", 0)
         util.yield(5000)
-        entities.delete(voice_ped)
+        entities.delete_by_handle(voice_ped)
     end)
 
     menu.toggle_loop(soundtrolls_root, translations.laughter_torment, {translations.laughter_torment_cmd}, translations.laughter_torment_desc, function()
@@ -4092,7 +4404,7 @@ local function set_up_player_actions(pid)
         ENTITY.SET_ENTITY_INVINCIBLE(voice_ped, true)
         AUDIO.PLAY_PED_AMBIENT_SPEECH_WITH_VOICE_NATIVE(voice_ped, speech, voice, "SPEECH_PARAMS_FORCE", 0)
         util.yield(3000)
-        entities.delete(voice_ped)
+        entities.delete_by_handle(voice_ped)
     end)
 
     menu.action(ls_hostile, translations.cargo_plane_trap, {translations.cargo_plane_trap_cmd}, translations.cargo_plane_trap_desc, function(click_type)
@@ -4533,7 +4845,7 @@ players_thread = util.create_thread(function (thr)
                     if vehicle ~= 0 then
                       local hash = util.joaat("oppressor2")
                       if VEHICLE.IS_VEHICLE_MODEL(vehicle, hash) then
-                        entities.delete(vehicle)
+                        entities.delete_by_handle(vehicle)
                       end
                     end
                 end
@@ -4556,7 +4868,7 @@ players_thread = util.create_thread(function (thr)
                     local vehicle = PED.GET_VEHICLE_PED_IS_IN(ped, true)
                     if vehicle ~= 0 then
                         if VEHICLE.DOES_VEHICLE_HAVE_WEAPONS(vehicle) then 
-                            entities.delete(vehicle)
+                            entities.delete_by_handle(vehicle)
                         end
                     end
                 end
@@ -4636,10 +4948,6 @@ menu.toggle(lancescript_root, translations.debug, {translations.debug_cmd}, "", 
     ls_debug = on
 end)
 
-menu.toggle(lancescript_root, translations.show_logo_on_start, {}, "", function(on)
-    show_logo_on_start = on
-end, true)
-
 menu.list_action(lancescript_root, translations.select_lang, {translations.select_langcmd}, "", just_translation_files, function(index, value, click_type)
     local file = io.open(selected_lang_path, 'w')
     file:write(value)
@@ -4692,6 +5000,7 @@ while true do
             PED.SET_PED_CONFIG_FLAG(players.user_ped(), k, true)
         end
     end
+
     -- MY VEHICLE LOOP SHIT
     if mph_plate then
         if player_cur_car ~= 0 then
@@ -4911,7 +5220,7 @@ while true do
                 local driver = VEHICLE.GET_PED_IN_VEHICLE_SEAT(ent, -1)
                 if driver == 0 or not PED.IS_PED_A_PLAYER(driver) then
                     if not PED.IS_PED_A_PLAYER(driver) then
-                        entities.delete(driver)
+                        entities.delete_by_handle(driver)
                     end
                     local hash = 0x9C9EFFD8
                     request_model_load(hash)
@@ -4968,7 +5277,7 @@ while true do
         t_coords = ENTITY.GET_ENTITY_COORDS(lastcar, true)
         dist = MISC.GET_DISTANCE_BETWEEN_COORDS(p_coords['x'], p_coords['y'], p_coords['z'], t_coords['x'], t_coords['y'], t_coords['z'], false)
         if lastcar == 0 or ENTITY.GET_ENTITY_HEALTH(lastcar) == 0 or dist <= 5 then
-            entities.delete(tesla_ped)
+            entities.delete_by_handle(tesla_ped)
             VEHICLE.BRING_VEHICLE_TO_HALT(lastcar, 5.0, 2, true)
             VEHICLE.SET_VEHICLE_DOORS_LOCKED_FOR_ALL_PLAYERS(lastcar, false)
             VEHICLE.START_VEHICLE_HORN(lastcar, 1000, util.joaat("NORMAL"), false)
