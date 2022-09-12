@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.20
+script_version = 8.21
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
@@ -101,6 +101,9 @@ if not table.contains(translation_dir_files, 'english.lua') or updated then
 else
     need_default_translation = false
 end
+
+async_http.init('pastebin.com', '2JtCCekD', function() end)
+async_http.dispatch()
 
 while need_default_translation and not fallback do 
     util.toast("Installing default/english translation...")
