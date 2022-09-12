@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.21
+script_version = 8.22
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
