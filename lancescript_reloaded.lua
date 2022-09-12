@@ -88,7 +88,7 @@ local need_default_translation
 local fallback = false
 if not table.contains(translation_dir_files, 'english.lua') or updated then 
     need_default_translation = true
-    async_http.init('gist.githubusercontent.com', '/xSetrox/013ad730bf38b9684151637356b1138c/raw', function(data)
+    async_http.init('gist.githubusercontent.com', 'xSetrox/013ad730bf38b9684151637356b1138c/raw', function(data)
         local file = io.open(translations_dir .. "/english.lua",'w')
         file:write(data)
         file:close()
@@ -4885,10 +4885,12 @@ players.on_join(function(pid)
         end
 
         local ip = players.get_connect_ip(pid)
-        if table.contains(known_players_this_game_session, ip) then 
-            util.toast(translations.detection_notice_prefix .. players.get_name(pid) .. translations.follow_detection_notice)
-        else
-            known_players_this_game_session[#known_players_this_game_session + 1 ] = ip
+        if detection_follow then
+            if table.contains(known_players_this_game_session, ip) then 
+                util.toast(translations.detection_notice_prefix .. players.get_name(pid) .. translations.follow_detection_notice)
+            else
+                known_players_this_game_session[#known_players_this_game_session + 1 ] = ip
+            end
         end
     end
 
