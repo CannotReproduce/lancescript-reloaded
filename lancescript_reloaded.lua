@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.23
+script_version = 8.24
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
@@ -1092,7 +1092,15 @@ menu.toggle(self_root, translations.burning_man, {translations.burning_man_cmd},
     end
 end)
 
--- chauffeur system
+tpf_units = 0.5
+menu.action(self_root, translations.tp_forward, {translations.tp_forward_cmd}, translations.tp_forward_desc, function(on_click)
+    local pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(players.user_ped(), 0, tpf_units, 0)
+    ENTITY.SET_ENTITY_COORDS_NO_OFFSET(PLAYER.PLAYER_PED_ID(), pos['x'], pos['y'], pos['z'], true, false, false)
+end)
+
+menu.slider(self_root, translations.tp_forward_units, {translations.tp_forward_units_cmd}, translations.tp_forward_units_desc, 5, 100, 1, 1, function(s)
+    tpf_units = s
+end)
 
 
 local function max_out_car(veh)
@@ -3355,6 +3363,23 @@ menu.list_action(tweaks_root, translations.force_radio, {""}, "", force_radio_op
         case 2:
             AUDIO.SET_CUSTOM_RADIO_TRACK_LIST(station, "END_CREDITS_KILL_TREVOR", true)
             break
+    end
+end)
+
+menu.toggle(tweaks_root, translations.aesthetify, {}, "", function(on)
+    local a_toggle = menu.ref_by_path('World>Aesthetic Light>Aesthetic Light')
+    if on then 
+        menu.trigger_commands("shader glasses_purple")
+        menu.trigger_commands("aestheticcolourred 255")
+        menu.trigger_commands("aestheticcolourgreen 0")
+        menu.trigger_commands("aestheticcolourblue 255")
+        menu.trigger_commands("aestheticrange 10000")
+        menu.trigger_commands("aestheticintensity 30")
+        menu.trigger_commands("time 0")
+        menu.set_value(a_toggle, true)
+    else
+        menu.set_value(a_toggle, false)
+        menu.trigger_commands("shader off")
     end
 end)
 
