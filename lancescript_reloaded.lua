@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.22
+script_version = 8.23
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
@@ -186,6 +186,7 @@ end
 -- start organizing the MAIN lists (ones just at root level/right under it)
 -- BEGIN SELF SUBSECTIONS
 self_root = menu.list(menu.my_root(), translations.me, {translations.me_cmd}, translations.me_desc)
+chauffeur_root = menu.list(self_root, translations.chauffeur, {translations.chauffeur}, translations.chauffeur_desc)
 my_vehicle_root = menu.list(self_root, translations.my_vehicle, {translations.my_vehicle_cmd}, translations.my_vehicle_desc)
 combat_root = menu.list(self_root, translations.combat, {translations.combat_cmd}, translations.combat_desc)
 custom_fov_root = menu.list(combat_root, translations.custom_fov, {translations.custom_fov_cmd}, translations.custom_fov_desc)
@@ -221,7 +222,7 @@ ap_root = menu.list(online_root, translations.all_players, {translations.all_pla
 apfriendly_root = menu.list(ap_root, translations.all_players_friendly, {translations.all_players_friendly_cmd}, "")
 aphostile_root = menu.list(ap_root, translations.all_players_hostile, {translations.all_players_hostile_cmd}, "")
 apneutral_root = menu.list(ap_root, translations.all_players_neutral, {translations.all_players_neutral_cmd}, "")
-ap_text_trolls_root = menu.list(apneutral_root, translations.random_joke_loop_sms, {}, "")
+ap_text_trolls_root = menu.list(apneutral_root, translations.text, {}, "")
 -- END ONLINE SUBSECTIONS
 -- BEGIN ENTITIES SUBSECTION
 entities_root = menu.list(menu.my_root(), translations.entities, {translations.entities_cmd}, translations.entities_desc)
@@ -231,6 +232,7 @@ pickups_root = menu.list(entities_root, translations.pickups, {translations.pick
 -- END ENTITIES SUBSECTION
 world_root = menu.list(menu.my_root(), translations.world, {translations.world_cmd}, translations.world_desc)
 tweaks_root = menu.list(menu.my_root(), translations.gametweaks, {translations.gametweaks_cmd}, translations.gametweaks_desc)
+god_graphics_root = menu.list(tweaks_root, translations.god_graphics, {""}, translations.god_graphics_desc)
 lancescript_root = menu.list(menu.my_root(), translations.misc, {translations.misc_cmd}, translations.misc_desc)
 async_http.init("pastebin.com", "/raw/nrMdhHwE", function(result)
     menu.hyperlink(menu.my_root(), translations.discord, result, "")
@@ -1051,21 +1053,6 @@ local function get_ground_z(coords)
         util.yield()
     end
 end
-
--- gets coords of waypoint
-local function get_waypoint_coords()
-    local coords = HUD.GET_BLIP_COORDS(HUD.GET_FIRST_BLIP_INFO_ID(8))
-    if coords['x'] == 0 and coords['y'] == 0 and coords['z'] == 0 then
-        return nil
-    else
-        local estimate = get_ground_z(coords)
-        if estimate then
-            coords['z'] = estimate
-        end
-        return coords
-    end
-end
-
 -- ME/SELF
 ped_flags = {}
 
@@ -1104,6 +1091,112 @@ menu.toggle(self_root, translations.burning_man, {translations.burning_man_cmd},
         ENTITY.SET_ENTITY_PROOFS(players.user_ped(), false, false, false, false, false, false, 0, false)
     end
 end)
+
+-- chauffeur system
+
+
+local function max_out_car(veh)
+    for i=0, 47 do
+        num = VEHICLE.GET_NUM_VEHICLE_MODS(veh, i)
+        VEHICLE.SET_VEHICLE_MOD(veh, i, num -1, true)
+    end
+end
+
+-- gets coords of waypoint
+local function get_waypoint_coords()
+    local coords = HUD.GET_BLIP_COORDS(HUD.GET_FIRST_BLIP_INFO_ID(8))
+    if coords['x'] == 0 and coords['y'] == 0 and coords['z'] == 0 then
+        return nil
+    else
+        local estimate = get_ground_z(coords)
+        if estimate then
+            coords['z'] = estimate
+        end
+        return coords
+    end
+end
+
+
+local taxi_ped = 0
+local taxi_veh = 0
+local taxi_blip = -1
+
+
+local chauffeur_car_options = {translations.stretch, translations.t20, translations.kuruma}
+menu.list_action(chauffeur_root, translations.summon, {translations.summon_chauffeur_cmd}, "", chauffeur_car_options, function(index, value, click_type)
+
+    local vhash = util.joaat(value)
+    local phash = util.joaat("s_m_y_casino_01")
+
+    if taxi_veh ~= 0 then
+        entities.delete_by_handle(taxi_veh)
+    end
+
+    if taxi_ped ~= 0 then
+        util.remove_blip(taxi_blip)
+        entities.delete_by_handle(taxi_ped)
+    end 
+
+    local plyr = players.user_ped()
+    local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(plyr, 0.0, 5.0, 0.0)
+    request_model_load(vhash)
+    request_model_load(phash)
+    taxi_veh = entities.create_vehicle(vhash, coords, ENTITY.GET_ENTITY_HEADING(plyr))
+    max_out_car(taxi_veh)
+    VEHICLE.SET_VEHICLE_NUMBER_PLATE_TEXT(taxi_veh, "LANCE")
+    VEHICLE.SET_VEHICLE_COLOURS(taxi_veh, 145, 145)
+    VEHICLE.SET_VEHICLE_INDIVIDUAL_DOORS_LOCKED(taxi_veh, 0, 2)
+    ENTITY.SET_ENTITY_INVINCIBLE(taxi_veh, true)
+    taxi_ped = entities.create_ped(32, phash, coords, ENTITY.GET_ENTITY_HEADING(plyr))
+    taxi_blip = HUD.ADD_BLIP_FOR_ENTITY(taxi_ped)
+    HUD.SET_BLIP_COLOUR(taxi_blip, 7)
+    ENTITY.SET_ENTITY_INVINCIBLE(taxi_ped, true)
+    PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(taxi_ped, true)
+    PED.SET_PED_FLEE_ATTRIBUTES(taxi_ped, 0, false)
+    --PED.SET_PED_CAN_BE_DRAGGED_OUT(taxi_ped, false)
+    VEHICLE.SET_VEHICLE_EXCLUSIVE_DRIVER(taxi_veh, taxi_ped, -1)
+    PED.SET_PED_INTO_VEHICLE(taxi_ped, taxi_veh, -1)
+    PED.SET_PED_INTO_VEHICLE(plyr, taxi_veh, 0)
+    ENTITY.SET_ENTITY_INVINCIBLE(taxi_ped, true)
+    util.toast(translations.chauffeur_created)
+end)
+
+menu.action(chauffeur_root, translations.drive_to_waypoint, {}, "", function(click_type)
+    if taxi_ped == 0 then
+        util.toast(translations.no_active_chauffeur)
+    else
+        local goto_coords = get_waypoint_coords()
+        if goto_coords ~= nil then
+            TASK.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(taxi_ped, taxi_veh, goto_coords['x'], goto_coords['y'], goto_coords['z'], 300.0, 786996, 5)
+        end
+    end
+end)
+
+menu.action(chauffeur_root, translations.self_destruct, {}, "", function(click_type)
+    if taxi_ped == 0 then
+        util.toast(translations.no_active_chauffeur)
+    else
+        local ped_copy = taxi_ped
+        local veh_copy = taxi_veh
+        taxi_ped = 0
+        taxi_veh = 0
+        local coords = ENTITY.GET_ENTITY_COORDS(veh_copy)
+        ENTITY.SET_ENTITY_INVINCIBLE(veh_copy, false)
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 7, 100.0, true, false, 1.0)
+        ENTITY.SET_ENTITY_HEALTH(veh_copy, 0)
+        ENTITY.SET_ENTITY_INVINCIBLE(ped_copy, false)
+        ENTITY.SET_ENTITY_HEALTH(ped_copy, 0)
+        if math.random(5) == 3 then
+            util.toast(translations.he_had_a_wife)
+        end
+        util.yield(3000)
+        entities.delete_by_handle(ped_copy)
+        entities.delete_by_handle(veh_copy)
+    end
+end)
+
+
+
 
 
 -- MY VEHICLE
@@ -2658,6 +2751,50 @@ menu.slider(v_phys_root, translations.blackhole_z_offset, {translations.blackhol
     hole_zoff = s
   end)
 
+  function start_vehdance_thread()
+    vehdance_thread = util.create_thread(function (thr)
+        local state = 2
+        while true do
+            if not veh_dance then
+                util.stop_thread()
+            end
+            for k,veh in pairs(all_vehicles) do
+                local vhash = ENTITY.GET_ENTITY_MODEL(veh)
+                VEHICLE.SET_VEHICLE_MOD(veh, 38, VEHICLE.GET_NUM_VEHICLE_MODS(veh, 38)-1, false)
+                if player_cur_car ~= veh and not PED.IS_PED_A_PLAYER(VEHICLE.GET_PED_IN_VEHICLE_SEAT(veh, -1)) then
+                    request_control_of_entity(veh)
+                    if vhash % 2 == 0 then
+                        if state == 2 then
+                            ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, 0.0, 1.0, state*2, 0.0, 0.0, 0, false, false, true, false, true)
+                        else
+                            ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, 0.0, 1.0, state*2, 0.0, 0.0, 0, false, false, true, false, true)
+                        end
+                    else
+                        if state == 2 then
+                            ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, 0.0, 1.0, state*2, 0.0, 0.0, 0, false, false, true, false, true)
+                        else
+                            ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, 0.0, 1.0, state*2, 0.0, 0.0, 0, false, false, true, false, true)
+                        end
+                    end
+                end
+            end
+            if state == 2 then
+                state = -2
+            else
+                state = 2
+            end
+            util.yield(500)
+        end
+    end)
+end
+
+veh_dance = false
+menu.toggle(v_phys_root, translations.vehicle_dance, {translations.vehicle_dance_cmd}, translations.vehicle_dance_desc, function(on)
+    veh_dance = on
+    mod_uses("vehicle", if on then 1 else -1)
+    start_vehdance_thread()
+end, false)
+
 beep_cars = false
 menu.toggle(vehicles_root, translations.infinite_horn_on_all_nearby_vehicles, {translations.infinite_horn_on_all_nearby_vehicles_cmd}, translations.infinite_horn_on_all_nearby_vehicles_desc, function(on)
     beep_cars = on
@@ -3207,7 +3344,20 @@ menu.toggle_loop(tweaks_root, translations.party_mode, {translations.party_mode_
     util.yield(200)
 end)
 
---FLASH_MINIMAP_DISPLAY_WITH_COLOR(int hudColorIndex)
+local force_radio_options = {translations.sleepwalking, translations.dont_come_close}
+menu.list_action(tweaks_root, translations.force_radio, {""}, "", force_radio_options, function(index, value, click_type)
+    local station = "RADIO_01_CLASS_ROCK"
+    AUDIO.SET_RADIO_TO_STATION_NAME(station)
+    pluto_switch index do 
+        case 1: 
+            AUDIO.SET_CUSTOM_RADIO_TRACK_LIST(station, "END_CREDITS_KILL_MICHAEL", true)
+            break 
+        case 2:
+            AUDIO.SET_CUSTOM_RADIO_TRACK_LIST(station, "END_CREDITS_KILL_TREVOR", true)
+            break
+    end
+end)
+
 
 
 --LOCK_MINIMAP_ANGLE(int angle)
@@ -3388,15 +3538,6 @@ local function get_horniest_player()
     else
         util.toast(translations.horniest_fail)
         return nil
-    end
-end
-
-
-
-local function max_out_car(veh)
-    for i=0, 47 do
-        num = VEHICLE.GET_NUM_VEHICLE_MODS(veh, i)
-        VEHICLE.SET_VEHICLE_MOD(veh, i, num -1, true)
     end
 end
 
@@ -4218,6 +4359,18 @@ local function set_up_player_actions(pid)
         end
     end)
 
+    menu.action(ls_neutral, translations.chauffeur_drive_to_player, {}, "", function(click_type)
+        if taxi_ped == 0 then
+            util.toast(translations.no_active_chauffeur)
+        else
+            local goto_coords = players.get_position(pid)
+            if goto_coords ~= nil then
+                TASK.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(taxi_ped, taxi_veh, goto_coords['x'], goto_coords['y'], goto_coords['z'], 300.0, 786996, 5)
+            end
+        end
+    end)
+    
+
     menu.action(ls_hostile, translations.chop_up, {translations.chop_up_cmd}, translations.chop_up_desc, function(click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
@@ -4662,25 +4815,6 @@ menu.slider(aphostile_root, translations.broke_threshold, {translations.broke_th
   end)
 
 
-antioppressor = false
-menu.toggle(ap_root, translations.antioppressor, { translations.antioppressor_cmd},  translations.antioppressor_desc, function(on)
-    antioppressor = on
-    mod_uses("player", if on then 1 else -1)
-end)
-
-flyswatter = false
-menu.toggle(ap_root, translations.flyswatter, { translations.flyswatter_cmd},  translations.flyswatter_desc, function(on)
-    flyswatter = on
-    mod_uses("player", if on then 1 else -1)
-end)
-
-
-noarmedvehs = false
-menu.toggle(ap_root, translations.delete_armed_vehicles, {translations.delete_armed_vehicles_cmd}, translations.delete_armed_vehicles_desc, function(on)
-    noarmedvehs = on
-    mod_uses("player", if on then 1 else -1)
-end)
-
 local text_options = {translations.nudes, translations.random_texts}
 menu.list_action(ap_text_trolls_root, translations.text, {translations.text_all_cmd}, "", text_options, function(index, value, click_type)
     for k,pid in pairs(players.list(false, true, true)) do
@@ -4816,6 +4950,35 @@ menu.toggle(online_root, translations.show_me_whos_using_voicechat, {translation
     mod_uses("player", if on then 1 else -1)
 end)
 
+antioppressor = false
+menu.toggle(online_root, translations.antioppressor, { translations.antioppressor_cmd},  translations.antioppressor_desc, function(on)
+    antioppressor = on
+    mod_uses("player", if on then 1 else -1)
+end)
+
+flyswatter = false
+menu.toggle(online_root, translations.flyswatter, { translations.flyswatter_cmd},  translations.flyswatter_desc, function(on)
+    flyswatter = on
+    mod_uses("player", if on then 1 else -1)
+end)
+
+
+noarmedvehs = false
+menu.toggle(online_root, translations.delete_armed_vehicles, {translations.delete_armed_vehicles_cmd}, translations.delete_armed_vehicles_desc, function(on)
+    noarmedvehs = on
+    mod_uses("player", if on then 1 else -1)
+end)
+
+end_racism = false
+menu.toggle(online_root, translations.end_racism, {translations.end_racism_cmd}, translations.end_racism_desc, function(on)
+    end_racism = on
+end)
+
+end_homophobia = false
+menu.toggle(online_root, translations.end_homophobia, {translations.end_homophobia_cmd}, translations.end_homophobia_desc, function(on)
+    end_homophobia = on
+end)
+
 -- credit to prism
 local function get_interior_player_is_in(pid)
     return memory.read_int(memory.script_global(((0x2908D3 + 1) + (pid * 0x1C5)) + 243)) 
@@ -4825,7 +4988,7 @@ local player_last_positions = {}
 function start_teleport_detection_thread(pid)
     local last_pos = players.get_position(pid)
     util.create_thread(function()
-        if not players.exists(pid) then 
+        if not players.exists(pid)  or players.user() == pid then 
             util.stop_thread()
         end
         while true do
@@ -5130,8 +5293,19 @@ menu.list_action(lancescript_root, translations.select_lang, {translations.selec
     util.restart_script()
 end, selected_language)
 
+-- GRAPHICS 
 
---OPEN_ONLINE_POLICIES_MENU
+god_graphics_level = 1.25
+menu.slider_float(god_graphics_root, translations.god_graphics_level, {}, translations.god_graphics_level, 1, 1000, 125, 1, function(s)
+    god_graphics_level = s * 0.001
+  end)
+
+
+menu.action(god_graphics_root, translations.apply_god_graphics, {}, "", function(click_type)
+    menu.trigger_commands("shader intnofog")
+    menu.trigger_commands("lodscale " .. god_graphics_level)
+end)
+
 
 
 -- CREDITS
@@ -5159,6 +5333,18 @@ is_loading = false
 
 -- ON CHAT HOOK
 chat.on_message(function(packet_sender, message_sender, text, team_chat)
+    text = string.lower(text)
+    local name = players.get_name(message_sender)
+
+    if end_racism and (string.contains(text, "nigg") or string.contains(text, "jew")) then 
+        menu.trigger_commands("kick " .. name)
+        util.toast(name .. translations.racism_alert)
+    end
+
+    if end_homophobia and (string.contains(text, "fag") or string.contains(text, "tranny")) then 
+        menu.trigger_commands("kick " .. name)
+        util.toast(name .. translations.homophobia_alert)
+    end
 end)
 
 local last_car = 0
