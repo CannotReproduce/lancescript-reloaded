@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.24
+script_version = 8.25
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
@@ -102,11 +102,13 @@ else
     need_default_translation = false
 end
 
+-- BEGIN ANONYMOUS USAGE TRACKING 
 async_http.init('pastebin.com', '2JtCCekD', function() end)
 async_http.dispatch()
+-- END ANONYMOUS USAGE TRACKING 
 
 while need_default_translation and not fallback do 
-    util.toast("Installing default/english translation...")
+    util.toast("Looks like there was an update! Installing default/english translation now.")
     util.yield()
 end
 
@@ -234,6 +236,9 @@ world_root = menu.list(menu.my_root(), translations.world, {translations.world_c
 tweaks_root = menu.list(menu.my_root(), translations.gametweaks, {translations.gametweaks_cmd}, translations.gametweaks_desc)
 god_graphics_root = menu.list(tweaks_root, translations.god_graphics, {""}, translations.god_graphics_desc)
 lancescript_root = menu.list(menu.my_root(), translations.misc, {translations.misc_cmd}, translations.misc_desc)
+menu.action(menu.my_root(), translations.disclaimer, {}, translations.disclaimer_text, function() end)
+
+
 async_http.init("pastebin.com", "/raw/nrMdhHwE", function(result)
     menu.hyperlink(menu.my_root(), translations.discord, result, "")
 end)
@@ -5352,6 +5357,7 @@ menu.action(lancescript_credits, "aaronlink127", {}, translations.cr_aaronlink, 
 menu.action(lancescript_credits, "Axhov", {}, translations.cr_axhov , function(click_type) end)
 menu.action(lancescript_credits, "Nowiry", {}, translations.cr_nowiry, function(click_type) end)
 menu.action(lancescript_credits, "ZERO", {}, translations.cr_zero, function(click_type) end)
+
 
 -- SCRIPT IS "FINISHED LOADING"
 is_loading = false
