@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.25
+script_version = 8.35
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
@@ -198,6 +198,7 @@ custom_fov_root = menu.list(combat_root, translations.custom_fov, {translations.
 online_root = menu.list(menu.my_root(), translations.online, {translations.online_cmd}, translations.online_desc)
 detections_root = menu.list(online_root, translations.detections, {translations.detections_cmd}, "")
 protections_root = menu.list(online_root, translations.protections, {translations.protections_cmd}, translations.protections_desc)
+randomizer_root = menu.list(online_root, translations.randomizer, {translations.randomizer_cmd}, translations.randomizer_desc)
 chat_presets_root = menu.list(online_root, translations.chatpresets, {translations.chatpresets_cmd}, translations.chatpresets_desc)
 local players_shortcut_command = menu.ref_by_path('Players', 37)
 menu.action(menu.my_root(), translations.players_shortcut, {}, translations.players_shortcut_desc, function(click_type)
@@ -295,6 +296,25 @@ local function mod_uses(type, incr)
 end
 
 -- UTILTITY FUNCTIONS
+
+local alphabet = "abcdefghijklmnopqrstuvwxyzABCEDFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+function random_string(length)
+    local res = {}
+    for i=1, length do 
+        res[i] = alphabet[math.random(#alphabet)]
+    end
+    return table.concat(res)
+end
+
+function random_ip_address()
+    local ip = {}
+    for i=1, 4 do 
+            ip[i] = tostring(math.random(1, 255)) 
+    end
+    return table.concat(ip, '.')
+end
+
 
 local function request_anim_dict(dict)
     while not STREAMING.HAS_ANIM_DICT_LOADED(dict) do
@@ -1158,18 +1178,18 @@ menu.list_action(chauffeur_root, translations.summon, {translations.summon_chauf
     max_out_car(taxi_veh)
     VEHICLE.SET_VEHICLE_NUMBER_PLATE_TEXT(taxi_veh, "LANCE")
     VEHICLE.SET_VEHICLE_COLOURS(taxi_veh, 145, 145)
-    VEHICLE.SET_VEHICLE_INDIVIDUAL_DOORS_LOCKED(taxi_veh, 0, 2)
     ENTITY.SET_ENTITY_INVINCIBLE(taxi_veh, true)
+    --local my_rel_hash = PED.GET_PED_RELATIONSHIP_GROUP_HASH(players.user_ped())
     taxi_ped = entities.create_ped(32, phash, coords, ENTITY.GET_ENTITY_HEADING(plyr))
+    PED.SET_PED_RELATIONSHIP_GROUP_HASH(taxi_ped, util.joaat("rgFM_AiLike"))
     taxi_blip = HUD.ADD_BLIP_FOR_ENTITY(taxi_ped)
     HUD.SET_BLIP_COLOUR(taxi_blip, 7)
     ENTITY.SET_ENTITY_INVINCIBLE(taxi_ped, true)
     PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(taxi_ped, true)
     PED.SET_PED_FLEE_ATTRIBUTES(taxi_ped, 0, false)
     --PED.SET_PED_CAN_BE_DRAGGED_OUT(taxi_ped, false)
-    VEHICLE.SET_VEHICLE_EXCLUSIVE_DRIVER(taxi_veh, taxi_ped, -1)
+    --VEHICLE.SET_VEHICLE_EXCLUSIVE_DRIVER(taxi_veh, taxi_ped, -1)
     PED.SET_PED_INTO_VEHICLE(taxi_ped, taxi_veh, -1)
-    PED.SET_PED_INTO_VEHICLE(plyr, taxi_veh, 0)
     ENTITY.SET_ENTITY_INVINCIBLE(taxi_ped, true)
     util.toast(translations.chauffeur_created)
 end)
@@ -2231,6 +2251,10 @@ peds_thread = util.create_thread(function (thr)
                         request_control_of_entity_once(ped)
                     end
 
+                    if make_peds_cops then 
+                        PED.SET_PED_AS_COP(ped, true)
+                    end
+
                     if ped_no_ragdoll then 
                         PED.SET_PED_CAN_RAGDOLL(ped, false)
                     end
@@ -3174,19 +3198,31 @@ supercleanse = menu.action(world_root, translations.super_cleanse, {translations
     menu.show_warning(supercleanse, click_type, translations.super_cleanse_warn, function()
         local ct = 0
         for k,ent in pairs(entities.get_all_vehicles_as_handles()) do
-            entities.delete_by_handle(ent)
-            ct = ct + 1
+            local driver = VEHICLE.GET_PED_IN_VEHICLE_SEAT(ent, -1)
+            if not PED.IS_PED_A_PLAYER(driver) then
+                entities.delete_by_handle(ent)
+                ct += 1
+            end
         end
         for k,ent in pairs(entities.get_all_peds_as_handles()) do
             if not PED.IS_PED_A_PLAYER(ent) then
                 entities.delete_by_handle(ent)
             end
-            ct = ct + 1
+            ct += 1
         end
         for k,ent in pairs(entities.get_all_objects_as_handles()) do
             entities.delete_by_handle(ent)
-            ct = ct + 1
+            ct += 1
         end
+        local rope_alloc = memory.alloc(4)
+        for i=0, 100 do 
+            memory.write_int(rope_alloc, i)
+            if PHYSICS.DOES_ROPE_EXIST(rope_alloc) then   
+                PHYSICS.DELETE_ROPE(rope_alloc)
+                ct += 1
+            end
+        end
+
         util.toast(translations.super_cleanse_complete .. ct .. translations.entities_removed)
     end, function()
         util.toast("Aborted.")
@@ -4606,13 +4642,6 @@ local function set_up_player_actions(pid)
         end
     end)
 
-    menu.action(ls_hostile, translations.drop_stickybomb, {translations.drop_stickybomb_cmd}, "", function(click_type)
-        local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local target = ENTITY.GET_ENTITY_COORDS(target_ped)
-        local random_ped = get_random_ped()
-        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(target['x'], target['y'], target['z']+1, target['x'], target['y'], target['z'], 300.0, true, 741814745, random_ped, true, false, 100.0)
-    end)
-
     --SET_VEHICLE_WHEEL_HEALTH(Vehicle vehicle, int wheelIndex, float health)
     menu.action(ls_hostile, translations.cage, {translations.cage_cmd}, "", function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
@@ -4726,6 +4755,23 @@ local function set_up_player_actions(pid)
         end
     end)
 
+    menu.action(ls_hostile, translations.make_wanted, {translations.make_wanted_cmd}, "", function(on_input)
+        local p_hash = util.joaat("s_m_y_swat_01")
+        local c 
+        local cop
+        for i=0, 5 do
+            c = players.get_position(pid)
+            c.z = -10
+            request_model_load(p_hash)
+            cop = entities.create_ped(6, p_hash, c, 0)
+            ENTITY.FREEZE_ENTITY_POSITION(cop, true)
+            FIRE.ADD_OWNED_EXPLOSION(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), c.x, c.y, c.z, 1, 100.0, false, true, 0.0)
+            util.yield(2000)
+            entities.delete_by_handle(cop)
+        end
+    end)
+
+
     menu.action(chattrolls_root, translations.send_schizo_message, { translations.send_schizo_message_cmd}, translations.send_schizo_message_desc, function(click_type)
         util.toast(translations.schizo_pls_input)
         menu.show_command_box(translations.send_schizo_message_cmd .. PLAYER.GET_PLAYER_NAME(pid) .. " ")
@@ -4775,6 +4821,36 @@ local function set_up_player_actions(pid)
 
     menu.action(npctrolls_root, translations.npc_jack_last_car, {translations.npc_jack_last_car_cmd}, translations.npc_jack_last_car_desc, function(click_type)
         npc_jack(pid, false)
+    end)
+
+    menu.action(npctrolls_root, translations.kidnap, {translations.kidnap}, translations.kidnap_desc, function(click_type)
+        local v_hash = util.joaat("mule")
+        local p_hash = util.joaat("s_m_y_factory_01")
+        local prop_hash = util.joaat("xs_prop_arena_showerdoor_s")
+        local user_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local container
+        request_model_load(v_hash)
+        request_model_load(p_hash)
+        local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(user_ped, 0.0, 1.0, 0.0)
+        local truck = entities.create_vehicle(v_hash, c, ENTITY.GET_ENTITY_HEADING(user_ped))
+        local driver = entities.create_ped(5, p_hash, c, 0)
+        PED.SET_PED_INTO_VEHICLE(driver, truck, -1)
+        PED.SET_PED_FLEE_ATTRIBUTES(driver, 0, false)
+        ENTITY.SET_ENTITY_INVINCIBLE(driver, true)
+        ENTITY.SET_ENTITY_INVINCIBLE(truck, true)
+        request_model_load(prop_hash)
+        container = entities.create_object(prop_hash, c)
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(container, truck, 0, 0.5, -4.3, 1, 0, 0, 90, true, false, true, false, 0, true)
+        container = entities.create_object(prop_hash, c)
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(container, truck, 0, -1.2, -4.3, 1, 0, 0, 90, true, false, true, false, 0, true)
+        container = entities.create_object(prop_hash, c)
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(container, truck, 0, -0.35, -4.3, 1, 0, 0, 90, true, false, true, false, 0, true)
+        VEHICLE.SET_VEHICLE_DOOR_BROKEN(truck, 2, true)
+        VEHICLE.SET_VEHICLE_DOOR_BROKEN(truck, 3, true)
+        PED.SET_PED_CAN_BE_DRAGGED_OUT(driver, false)
+        PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(driver, true)
+        util.yield(2000)
+        TASK.TASK_VEHICLE_DRIVE_TO_COORD(driver, truck, math.random(1000), math.random(1000), math.random(100), 100, 1, ENTITY.GET_ENTITY_MODEL(truck), 786996, 5, 0)
     end)
 
     menu.toggle(npctrolls_root, translations.nearby_peds_combat_player, {translations.nearby_peds_combat_player_desc}, "", function(on)
@@ -4861,17 +4937,6 @@ menu.list_action(ap_text_trolls_root, translations.text, {translations.text_all_
     end
     util.toast(translations.texts_submitted)
 end)
-
-menu.toggle_loop(ap_text_trolls_root, translations.random_joke_loop_sms, {translations.ap_random_joke_loop_sms_cmd}, translations.random_joke_loop_sms_desc, function(click_type)
-    local joke = get_random_joke()
-    for k,v in pairs(players.list(false, true, true)) do
-        if joke ~= "FAIL" then
-            players.send_sms(v, joke)
-        end
-    end
-    util.yield(5000)
-end)
-
 
 menu.action(ap_root, translations.toast_best_mug_target, {translations.toast_best_mug_target_cmd}, translations.toast_best_mug_target_desc, function(click_type)
     local ret = get_best_mug_target()
@@ -5009,6 +5074,49 @@ menu.toggle(online_root, translations.end_homophobia, {translations.end_homophob
     end_homophobia = on
 end)
 
+random_name_spoof = false
+menu.toggle(randomizer_root, translations.random_spoofed_name, {}, translations.randomizer_name_notice, function(on)
+    random_name_spoof = on
+    if on then 
+        menu.trigger_commands("spoofedname " .. random_string(16))
+    end
+end)
+
+
+random_ip_spoof = false
+menu.toggle(randomizer_root, translations.random_spoofed_ip, {}, "", function(on)
+    random_ip_spoof = on
+    if on then 
+        menu.trigger_commands("spoofedip " .. random_ip_address())
+    end
+end)
+
+random_rank_spoof = false
+menu.toggle(randomizer_root, translations.random_spoofed_rank, {}, "", function(on)
+    random_rank_spoof = on
+    if on then 
+        menu.trigger_commands("spoofedrank " .. math.random(10000))
+    end
+end)
+
+menu.toggle_loop(randomizer_root, translations.random_chat_spam_content, {}, "", function(on)
+    menu.trigger_commands("spamtext " .. random_string(254))
+    util.yield(100)
+end)
+
+
+util.on_transition_finished(function()
+    if random_name_spoof then
+        menu.trigger_commands("spoofedname " .. random_string(16))
+    end
+    if random_ip_spoof then
+        menu.trigger_commands("spoofedip " .. random_ip_address())
+    end
+    if random_rank_spoof then
+        menu.trigger_commands("spoofedrank " .. math.random(10000))
+    end
+end)
+
 -- credit to prism
 local function get_interior_player_is_in(pid)
     return memory.read_int(memory.script_global(((0x2908D3 + 1) + (pid * 0x1C5)) + 243)) 
@@ -5035,6 +5143,23 @@ function start_teleport_detection_thread(pid)
             end
             last_pos = players.get_position(pid)
             util.yield(1000)
+        end
+    end)
+end
+
+function keep_vehicle_doors_closed(veh)
+    util.create_thread(function(veh)
+        while true do
+            if ENTITY.DOES_ENTITY_EXIST(veh) then 
+                for i=0, 12 do
+                    VEHICLE.SET_VEHICLE_DOOR_LATCHED(veh, i, true, true, true)
+                    VEHICLE.SET_VEHICLE_DOOR_SHUT(veh, i, true)
+                end
+                VEHICLE.SET_VEHICLE_DOORS_LOCKED(veh, 3)
+            else
+                util.stop_thread()
+            end
+            util.yield()
         end
     end)
 end
