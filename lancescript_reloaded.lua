@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.35
+script_version = 8.36
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
@@ -4824,14 +4824,12 @@ local function set_up_player_actions(pid)
     end)
 
     menu.action(npctrolls_root, translations.kidnap, {translations.kidnap}, translations.kidnap_desc, function(click_type)
-        local v_hash = util.joaat("mule")
+        local v_hash = util.joaat("boxville3")
         local p_hash = util.joaat("s_m_y_factory_01")
-        local prop_hash = util.joaat("xs_prop_arena_showerdoor_s")
         local user_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local container
         request_model_load(v_hash)
         request_model_load(p_hash)
-        local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(user_ped, 0.0, 1.0, 0.0)
+        local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(user_ped, 0.0, 2.0, 0.0)
         local truck = entities.create_vehicle(v_hash, c, ENTITY.GET_ENTITY_HEADING(user_ped))
         local driver = entities.create_ped(5, p_hash, c, 0)
         PED.SET_PED_INTO_VEHICLE(driver, truck, -1)
@@ -4839,14 +4837,6 @@ local function set_up_player_actions(pid)
         ENTITY.SET_ENTITY_INVINCIBLE(driver, true)
         ENTITY.SET_ENTITY_INVINCIBLE(truck, true)
         request_model_load(prop_hash)
-        container = entities.create_object(prop_hash, c)
-        ENTITY.ATTACH_ENTITY_TO_ENTITY(container, truck, 0, 0.5, -4.3, 1, 0, 0, 90, true, false, true, false, 0, true)
-        container = entities.create_object(prop_hash, c)
-        ENTITY.ATTACH_ENTITY_TO_ENTITY(container, truck, 0, -1.2, -4.3, 1, 0, 0, 90, true, false, true, false, 0, true)
-        container = entities.create_object(prop_hash, c)
-        ENTITY.ATTACH_ENTITY_TO_ENTITY(container, truck, 0, -0.35, -4.3, 1, 0, 0, 90, true, false, true, false, 0, true)
-        VEHICLE.SET_VEHICLE_DOOR_BROKEN(truck, 2, true)
-        VEHICLE.SET_VEHICLE_DOOR_BROKEN(truck, 3, true)
         PED.SET_PED_CAN_BE_DRAGGED_OUT(driver, false)
         PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(driver, true)
         util.yield(2000)
