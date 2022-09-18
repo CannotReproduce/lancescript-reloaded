@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED
-script_version = 8.36
+script_version = 8.37
 all_used_cameras = {}
 util.require_natives("1660775568")
 gta_labels = require('all_labels')
@@ -245,11 +245,6 @@ async_http.init("pastebin.com", "/raw/nrMdhHwE", function(result)
 end)
 async_http.dispatch()
 
-reap = false
-menu.toggle(entities_root,  translations.reapermode, {translations.reapermode_cmd}, translations.reapermode_desc, function(on)
-    reap = on
-end)
-
 -- entity-pool gathering handling
 vehicle_uses = 0
 ped_uses = 0
@@ -257,7 +252,6 @@ pickup_uses = 0
 player_uses = 0
 object_uses = 0
 robustmode = false
-reap = false
 
 local function mod_uses(type, incr)
     -- this func is a patch. every time the script loads, all the toggles load and set their state. in some cases this makes the _uses optimization negative and breaks things. this prevents that.
@@ -2168,15 +2162,14 @@ objects_thread = util.create_thread(function (thr)
             if show_updates then
                 ls_log("Object pool is being updated")
             end
-            all_objects = entities.get_all_objects_as_handles()
-            for k,obj in pairs(all_objects) do
-                if reap then
-                    request_control_of_entity_once(obj)
-                end
+            all_objects = entities.get_all_objects_as_pointers()
+            for k, obj_ptr in pairs(all_objects) do
                 --- PROJECTILE SHIT
-                if is_entity_a_projectile(ENTITY.GET_ENTITY_MODEL(obj)) then
+                local obj_model = entities.get_model_hash(obj_ptr)
+                if is_entity_a_projectile(obj_model) then
                     if projectile_warn then
-                        local c = ENTITY.GET_ENTITY_COORDS(obj)
+                        local obj_hdl = entities.pointer_to_handle(obj_ptr)
+                        local c = ENTITY.GET_ENTITY_COORDS(obj_hdl)
                         local screen_c = world_to_screen_coords(c.x, c.y, c.z)
                         local color = to_rgb(255, 0, 0, 255)
                         --directx.draw_text(screen_c.x, screen_c.y, "!", 5, 0.100, color, false)
@@ -2184,20 +2177,24 @@ objects_thread = util.create_thread(function (thr)
                         GRAPHICS.DRAW_SPRITE('visualflow', 'crosshair', screen_c.x, screen_c.y, 0.02, 0.03, 0.0, 255, 0, 0, 255, true, 0)
                     end
                     if projectile_cleanse then 
-                        entities.delete_by_handle(obj)
+                        entities.delete_by_pointer(obj_ptr)
                     end
+
                     if projectile_spaz then
+                        local obj_hdl = entities.pointer_to_handle(obj_ptr)
                         --local target = entity.get_entity_owner(obj) 
                         local strength = 20
-                        ENTITY.APPLY_FORCE_TO_ENTITY(obj, 1, math.random(-strength, strength), math.random(-strength, strength), math.random(-strength, strength), 0.0, 0.0, 0.0, 1, true, false, true, true, true)
+                        ENTITY.APPLY_FORCE_TO_ENTITY(obj_hdl, 1, math.random(-strength, strength), math.random(-strength, strength), math.random(-strength, strength), 0.0, 0.0, 0.0, 1, true, false, true, true, true)
                     end
                     if slow_projectiles then
+                        local obj_hdl = entities.pointer_to_handle(obj_ptr)
                         --ENTITY.SET_ENTITY_VELOCITY(obj, 0.0, 0.0, 0.0)
-                        ENTITY.SET_ENTITY_MAX_SPEED(obj, 0.5)
+                        ENTITY.SET_ENTITY_MAX_SPEED(obj_hdl, 0.5)
                     end
                     if blip_projectiles then
-                        if HUD.GET_BLIP_FROM_ENTITY(obj) == 0 then
-                            local proj_blip = HUD.ADD_BLIP_FOR_ENTITY(obj)
+                        local obj_hdl = entities.pointer_to_handle(obj_ptr)
+                        if HUD.GET_BLIP_FROM_ENTITY(obj_hdl) == 0 then
+                            local proj_blip = HUD.ADD_BLIP_FOR_ENTITY(obj_hdl)
                             HUD.SET_BLIP_SPRITE(proj_blip, 443)
                             HUD.SET_BLIP_COLOUR(proj_blip, 75)
                             projectile_blips[#projectile_blips + 1] = proj_blip 
@@ -2206,17 +2203,10 @@ objects_thread = util.create_thread(function (thr)
                 end
                 --------------
                 if l_e_o_on then
-                    local size = get_model_size(ENTITY.GET_ENTITY_MODEL(obj))
+                    local size = get_model_size(obj_model)
                     if size.x > l_e_max_x or size.y > l_e_max_y or size.z > l_e_max_y then
-                        entities.delete_by_handle(obj)
+                        entities.delete_by_pointer(obj_hdl)
                     end
-                end
-                if object_rainbow then
-                    OBJECT._SET_OBJECT_LIGHT_COLOR(obj, 1, rgb[1], rgb[2], rgb[3])
-                end
-
-                if rapidtraffic then
-                    ENTITY.SET_ENTITY_TRAFFICLIGHT_OVERRIDE(obj, tlightstate)
                 end
             end    
         end
@@ -2224,7 +2214,6 @@ objects_thread = util.create_thread(function (thr)
     end
 end)
 
--- PEDS
 
 peds_thread = util.create_thread(function (thr)
     while true do
@@ -2247,9 +2236,6 @@ peds_thread = util.create_thread(function (thr)
                 end
                 
                 if not PED.IS_PED_A_PLAYER(ped) then
-                    if reap then
-                        request_control_of_entity_once(ped)
-                    end
 
                     if make_peds_cops then 
                         PED.SET_PED_AS_COP(ped, true)
@@ -2902,9 +2888,6 @@ vehicles_thread = util.create_thread(function (thr)
                 local driver = VEHICLE.GET_PED_IN_VEHICLE_SEAT(veh, -1)
                 -- FOR THINGS THAT SHOULD NOT WORK ON CARS WITH PLAYERS DRIVING THEM
                 if player_cur_car ~= veh and (not PED.IS_PED_A_PLAYER(driver)) or driver == 0 then
-                    if reap then
-                        request_control_of_entity_once(veh)
-                    end
                     
                     if yeetsubmarines then
                         if VEHICLE.IS_VEHICLE_MODEL(veh, util.joaat("kosatka")) and ENTITY.IS_ENTITY_IN_WATER(veh) then
@@ -2987,10 +2970,6 @@ pickups_thread = util.create_thread(function(thr)
             ls_log("Pickups pool is being updated")
             all_pickups = entities.get_all_pickups_as_handles()
             for k,p in pairs(all_pickups) do
-                if reap then
-                    request_control_of_entity_once(p)
-                end
-
                 if tp_all_pickups then
                     local pos = ENTITY.GET_ENTITY_COORDS(tp_pickup_tar, true)
                     ENTITY.SET_ENTITY_COORDS_NO_OFFSET(p, pos['x'], pos['y'], pos['z'], true, false, false)
@@ -3240,18 +3219,6 @@ menu.action(world_root, translations.sky_island, {translations.sky_island_cmd}, 
         request_model_load(1054678467)
         island_block = entities.create_object(1054678467, c)
     end
-end)
-
-object_rainbow = false
-menu.toggle(world_root, translations.rainbow_object_lights, {translations.rainbow_object_lights_cmd}, translations.rainbow_object_lights_desc, function(on)
-    object_rainbow = on
-    mod_uses("object", if on then 1 else -1)
-end)
-
-rapidtraffic = false
-menu.toggle(world_root, translations.rapid_traffic_lights, {translations.rapid_traffic_lights_cmd}, translations.rapid_traffic_lights_desc, function(on)
-    rapidtraffic = on
-    mod_uses("object", if on then 1 else -1)
 end)
 
 local angry_planes = false
