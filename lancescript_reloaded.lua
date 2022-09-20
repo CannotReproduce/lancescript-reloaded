@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 8.47
+script_version = 8.48
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -5596,20 +5596,15 @@ while true do
     end
 
     if walkonwater then
-        local car = PED.GET_VEHICLE_PED_IS_IN(players.user_ped(), false)
-        if car == 0 then
-            local pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(players.user_ped(), 0.0, 2.0, 0.0)
-            -- we need to offset this because otherwise the player keeps diving off the thing, like a fucking dumbass
-            -- ht isnt actually used here, but im allocating some memory anyways to prevent a possible crash, probably. idk im no computer engineer
-            local ht = memory.alloc(4)
-            -- this is better than ENTITY.IS_ENTITY_IN_WATER because it can detect if a player is actually above water without them even being "in" it
-            if WATER.GET_WATER_HEIGHT(pos['x'], pos['y'], pos['z'], ht) then
-                local t, z = util.get_ground_z(pos['x'], pos['y'], pos['z'])
-                if t then
-                    ENTITY.SET_ENTITY_COORDS_NO_OFFSET(dow_block, pos['x'], pos['y'], z, false, false, false)
-                    ENTITY.SET_ENTITY_HEADING(dow_block, ENTITY.GET_ENTITY_HEADING(players.user_ped()))
-                end
-            end
+        vehicle = PED.GET_VEHICLE_PED_IS_IN(players.user_ped(), false)
+        local pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(players.user_ped(), 0.0, 2.0, 0.0)
+        -- we need to offset this because otherwise the player keeps diving off the thing, like a fucking dumbass
+        -- ht isnt actually used here, but im allocating some memory anyways to prevent a possible crash, probably. idk im no computer engineer
+        local ht = memory.alloc(4)
+        -- this is better than ENTITY.IS_ENTITY_IN_WATER because it can detect if a player is actually above water without them even being "in" it
+        if WATER.GET_WATER_HEIGHT(pos['x'], pos['y'], pos['z'], ht) then
+            ENTITY.SET_ENTITY_COORDS_NO_OFFSET(dow_block, pos['x'], pos['y'], memory.read_float(ht), false, false, false)
+            ENTITY.SET_ENTITY_HEADING(dow_block, ENTITY.GET_ENTITY_HEADING(players.user_ped()))
         end
     end
 
@@ -5620,11 +5615,8 @@ while true do
             local ht = memory.alloc(4)
             -- this is better than ENTITY.IS_ENTITY_IN_WATER because it can detect if a player is actually above water without them even being "in" it
             if WATER.GET_WATER_HEIGHT(pos['x'], pos['y'], pos['z'], ht) then
-                local t, z = util.get_ground_z(pos['x'], pos['y'], pos['z'])
-                if t then
-                    ENTITY.SET_ENTITY_COORDS_NO_OFFSET(dow_block, pos['x'], pos['y'], z, false, false, false)
-                    ENTITY.SET_ENTITY_HEADING(dow_block, ENTITY.GET_ENTITY_HEADING(player_cur_car))
-                end
+                ENTITY.SET_ENTITY_COORDS_NO_OFFSET(dow_block, pos['x'], pos['y'], memory.read_float(ht), false, false, false)
+                ENTITY.SET_ENTITY_HEADING(dow_block, ENTITY.GET_ENTITY_HEADING(player_cur_car))
             end
         else
             ENTITY.SET_ENTITY_COORDS_NO_OFFSET(dow_block, 0, 0, 0, false, false, false)
