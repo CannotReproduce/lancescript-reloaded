@@ -1,7 +1,7 @@
--- LANCESCRIPT RELOADED
-script_version = 8.37
+-- LANCESCRIPT RELOADED1
+script_version = 8.47
 all_used_cameras = {}
-util.require_natives("1660775568")
+util.require_natives("1663599433")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
 sexts = gta_labels.sexts
@@ -145,7 +145,7 @@ if not filesystem.is_dir(resources_dir) then
 end
 
 -- check online version
-online_v = tonumber(NETWORK._GET_ONLINE_VERSION())
+online_v = tonumber(NETWORK.GET_ONLINE_VERSION())
 if online_v > ocoded_for then
     util.toast(translations.outdated_script_1 .. online_v .. translations.outdated_script_2 .. ocoded_for .. translations.outdated_script_3)
 end
@@ -199,6 +199,7 @@ online_root = menu.list(menu.my_root(), translations.online, {translations.onlin
 detections_root = menu.list(online_root, translations.detections, {translations.detections_cmd}, "")
 protections_root = menu.list(online_root, translations.protections, {translations.protections_cmd}, translations.protections_desc)
 randomizer_root = menu.list(online_root, translations.randomizer, {translations.randomizer_cmd}, translations.randomizer_desc)
+speedrun_root = menu.list(online_root, translations.speedrun, {translations.speedrun_cmd}, translations.speedrun_desc)
 chat_presets_root = menu.list(online_root, translations.chatpresets, {translations.chatpresets_cmd}, translations.chatpresets_desc)
 local players_shortcut_command = menu.ref_by_path('Players', 37)
 menu.action(menu.my_root(), translations.players_shortcut, {}, translations.players_shortcut_desc, function(click_type)
@@ -462,7 +463,7 @@ end
 -- credit to vsus
 
 local function is_script_running(str)
-    return SCRIPT._GET_NUMBER_OF_REFERENCES_OF_SCRIPT_WITH_NAME_HASH(util.joaat(str)) > 0
+    return SCRIPT.GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(util.joaat(str)) > 0
 end
 
 local function request_game_script(str)
@@ -719,14 +720,16 @@ end
 local function get_model_size(hash)
     local minptr = memory.alloc(24)
     local maxptr = memory.alloc(24)
+    local min = {}
+    local max = {}
     MISC.GET_MODEL_DIMENSIONS(hash, minptr, maxptr)
-    min = memory.read_vector3(minptr)
-    max = memory.read_vector3(maxptr)
+    min.x, min.y, min.z = v3.get(minptr)
+    max.x, max.y, max.z = v3.get(maxptr)
     local size = {}
-    size['x'] = max['x'] - min['x']
-    size['y'] = max['y'] - min['y']
-    size['z'] = max['z'] - min['z']
-    size['max'] = math.max(size['x'], size['y'], size['z'])
+    size.x = max.x - min.x
+    size.y = max.y - min.y
+    size.z = max.z - min.z
+    size['max'] = math.max(size.x, size.y, size.z)
     return size
 end
 
@@ -1181,10 +1184,11 @@ menu.list_action(chauffeur_root, translations.summon, {translations.summon_chauf
     ENTITY.SET_ENTITY_INVINCIBLE(taxi_ped, true)
     PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(taxi_ped, true)
     PED.SET_PED_FLEE_ATTRIBUTES(taxi_ped, 0, false)
-    --PED.SET_PED_CAN_BE_DRAGGED_OUT(taxi_ped, false)
-    --VEHICLE.SET_VEHICLE_EXCLUSIVE_DRIVER(taxi_veh, taxi_ped, -1)
+    PED.SET_PED_CAN_BE_DRAGGED_OUT(taxi_ped, false)
+    VEHICLE.SET_VEHICLE_EXCLUSIVE_DRIVER(taxi_veh, taxi_ped, -1)
     PED.SET_PED_INTO_VEHICLE(taxi_ped, taxi_veh, -1)
     ENTITY.SET_ENTITY_INVINCIBLE(taxi_ped, true)
+    PED.SET_PED_INTO_VEHICLE(players.user_ped(), taxi_veh, 0)
     util.toast(translations.chauffeur_created)
 end)
 
@@ -1196,6 +1200,15 @@ menu.action(chauffeur_root, translations.drive_to_waypoint, {}, "", function(cli
         if goto_coords ~= nil then
             TASK.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(taxi_ped, taxi_veh, goto_coords['x'], goto_coords['y'], goto_coords['z'], 300.0, 786996, 5)
         end
+    end
+end)
+
+
+menu.action(chauffeur_root, translations.teleport_into_cab, {}, "", function(click_type)
+    if taxi_ped == 0 then
+        util.toast(translations.no_active_chauffeur)
+    else
+        PED.SET_PED_INTO_VEHICLE(players.user_ped(), taxi_veh, 0)
     end
 end)
 
@@ -1228,6 +1241,7 @@ end)
 
 -- MY VEHICLE
 my_vehicle_movement_root = menu.list(my_vehicle_root, translations.movement, {translations.movement_cmd}, translations.movement_desc)
+vehicle_workshop_root = menu.list(my_vehicle_root, translations.vehicle_workshop, {translations.vehicle_workshop_cmd}, "")
 
 speedometer_plate_root = menu.list(my_vehicle_root, translations.speed_plate_root, {translations.speed_plate_root_cmd}, translations.speed_plate_desc)
 mph_plate = false
@@ -1362,7 +1376,7 @@ local ls_vehiclefly = menu.toggle_loop(my_vehicle_movement_root, translations.ve
     if player_cur_car ~= 0 and PED.IS_PED_IN_ANY_VEHICLE(players.user_ped(), true) then
         ENTITY.SET_ENTITY_MAX_SPEED(player_cur_car, vflyspeed)
         local c = CAM.GET_GAMEPLAY_CAM_ROT(0)
-        CAM._DISABLE_VEHICLE_FIRST_PERSON_CAM_THIS_FRAME()
+        CAM.DISABLE_CINEMATIC_BONNET_CAMERA_THIS_UPDATE()
         ENTITY.SET_ENTITY_ROTATION(player_cur_car, c.x, c.y, c.z, 0, true)
         any_c_pressed = false
         --W
@@ -1494,9 +1508,29 @@ end)
 menu.toggle_loop(my_vehicle_root, translations.horn_spam, {translations.horn_spam_cmd}, "", function(toggle)
     if player_cur_car ~= 0 and  PED.IS_PED_IN_ANY_VEHICLE(players.user_ped(), true) then
         VEHICLE.SET_VEHICLE_MOD(player_cur_car, 14, math.random(0, 51), false)
-        PAD._SET_CONTROL_NORMAL(2, 86, 1.0)
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 86, 1.0)
         util.yield(50)
-        PAD._SET_CONTROL_NORMAL(2, 86, 0.0)
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 86, 0.0)
+    end
+end)
+
+local seat_shifter_list = menu.list_action(my_vehicle_root, translations.shift_seat, {translations.shift_seat_cmd}, "", {translations.no_active_veh}, function(index, value)
+    if player_cur_car ~= 0 and value ~= translations.no_active_veh then
+        if VEHICLE.IS_VEHICLE_SEAT_FREE(player_cur_car, tonumber(value), true) then 
+            PED.SET_PED_INTO_VEHICLE(players.user_ped(), player_cur_car, tonumber(value))
+        else
+            util.toast(translations.seat_taken)
+        end
+    end
+end)
+menu.click_slider(my_vehicle_root, translations.drop_bombs, {translations.drop_bombs_cmd}, "", 1, 100, 10, 1, function(num_bombs)
+    if player_cur_car ~= 0 then 
+        for i=0, num_bombs do
+            local veh_size = get_model_size(ENTITY.GET_ENTITY_MODEL(player_cur_car))
+            local bomb_pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(player_cur_car, 0.0, 0.0, - (veh_size.y - 3.0))
+            MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS_IGNORE_ENTITY(bomb_pos.x, bomb_pos.y, bomb_pos.z, bomb_pos.x, bomb_pos.y, bomb_pos.z-0.1, 100.0, true, -1312131151, players.user_ped(), true, false, 100, player_cur_car)
+            util.yield(100)
+        end
     end
 end)
 
@@ -1573,6 +1607,17 @@ function on_user_change_vehicle(vehicle)
             set_vehicle_into_drift_mode(vehicle)
         end
 
+        local deez_nuts = {}
+        local num_seats = VEHICLE.GET_VEHICLE_MODEL_NUMBER_OF_SEATS(ENTITY.GET_ENTITY_MODEL(vehicle))
+        for i=1, num_seats do
+            if num_seats >= 2 then
+                deez_nuts[#deez_nuts + 1] = tostring(i - 2)
+            else
+                deez_nuts[#deez_nuts + 1] = tostring(i)
+            end
+        end
+        menu.set_list_action_options(seat_shifter_list, deez_nuts)
+
         if true then 
             native_invoker.begin_call()
             native_invoker.push_arg_int(vehicle)
@@ -1614,7 +1659,7 @@ end
 menu.toggle_loop(my_vehicle_movement_root, translations.hold_shift_to_drift, {translations.hold_shift_to_drift_cmd}, translations.hold_shift_to_drift_desc, function(on)
     if PAD.IS_CONTROL_PRESSED(21, 21) then
         VEHICLE.SET_VEHICLE_REDUCE_GRIP(player_cur_car, true)
-        VEHICLE._SET_VEHICLE_REDUCE_TRACTION(player_cur_car, 0.0)
+        VEHICLE.SET_VEHICLE_REDUCE_GRIP_LEVEL(player_cur_car, 0.0)
     else
         VEHICLE.SET_VEHICLE_REDUCE_GRIP(player_cur_car, false)
     end
@@ -1644,6 +1689,14 @@ menu.toggle_loop(my_vehicle_movement_root, translations.horn_boost, {translation
         if AUDIO.IS_HORN_ACTIVE(player_cur_car) then
             ENTITY.APPLY_FORCE_TO_ENTITY_CENTER_OF_MASS(player_cur_car, 1, 0.0, 1.0, 0.0, true, true, true, true)
         end
+    end
+end)
+
+cur_v_stance = 0.0
+menu.click_slider_float(vehicle_workshop_root, translations.stance, {translations.stance_cmd}, "", 0, 200, 0, 1, function(s)
+    cur_v_stance = s * -0.001
+    if player_cur_car ~= 0 then
+        set_vehicle_handling_value(player_cur_car, 0xD0, cur_v_stance)
     end
 end)
 
@@ -1899,9 +1952,9 @@ menu.toggle_loop(triggerbot_root, translations.triggerbot, {translations.trigger
         local ent = memory.read_int(ent_alloc)
         if ENTITY.GET_ENTITY_TYPE(ent) == 1 and PLAYER.IS_PLAYER_FREE_AIMING_AT_ENTITY(players.user(), ent) then
             if PED.GET_PED_CONFIG_FLAG(players.user_ped(), 78, true) then  
-                PAD._SET_CONTROL_NORMAL(2, 24, 1.0)
+                PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 24, 1.0)
                 util.yield(triggerbot_delay)
-                PAD._SET_CONTROL_NORMAL(2, 24, 0.0)
+                PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 24, 0.0)
             end
         end
     end
@@ -3577,9 +3630,6 @@ end
 local function ram_ped_with(ped, vehicle, offset, sog)
     request_model_load(vehicle)
     local front = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, offset, 0.0)
-    front.x = front['x']
-    front.y = front['y']
-    front.z = front['z']
     local veh = entities.create_vehicle(vehicle, front, ENTITY.GET_ENTITY_HEADING(ped)+180)
     set_entity_face_entity(veh, ped, true)
     if ram_onground then
@@ -3625,9 +3675,6 @@ end
 local function give_car_addon(pid, hash, center, ang)
     local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
     local pos = ENTITY.GET_ENTITY_COORDS(car, true)
-    pos.x = pos['x']
-    pos.y = pos['y']
-    pos.z = pos['z']
     request_model_load(hash)
     local ramp = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, pos['x'], pos['y'], pos['z'], true, false, false)
     local size = get_model_size(ENTITY.GET_ENTITY_MODEL(car))
@@ -3822,9 +3869,6 @@ local function send_groundv_attacker(vhash, phash, pid, givegun, num_attackers, 
     request_model_load(phash)
     for i=1, num_attackers do
         local spawn_pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(player_ped, num_attackers-i, -10.0, 0.0)
-        spawn_pos.x = spawn_pos['x']
-        spawn_pos.y = spawn_pos['y']
-        spawn_pos.z = spawn_pos['z']
         local bike = entities.create_vehicle(vhash, spawn_pos, ENTITY.GET_ENTITY_HEADING(player_ped))
         VEHICLE.SET_VEHICLE_ENGINE_ON(bike, true, true, false)
         for i=-1, VEHICLE.GET_VEHICLE_MODEL_NUMBER_OF_SEATS(vhash) - 2 do
@@ -3890,7 +3934,7 @@ local function send_attacker_squad(p_hash, v_hash, forcestayinv, godmodeatk, hp,
         end
 
         if forcestayinv then
-            VEHICLE._SET_VEHICLE_DOORS_LOCKED_FOR_UNK(vehicle, true)
+            VEHICLE.SET_VEHICLE_DOORS_LOCKED_FOR_ALL_TEAMS(vehicle, true)
             VEHICLE.SET_VEHICLE_DOORS_LOCKED(vehicle, true)
         end
     end
@@ -4061,7 +4105,7 @@ local function set_up_player_actions(pid)
         local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
         if car ~= 0 then
             request_control_of_entity(car)
-            local d = VEHICLE._GET_NUMBER_OF_VEHICLE_DOORS(car)
+            local d = VEHICLE.GET_NUMBER_OF_VEHICLE_DOORS(car)
             for i=0, d do
                 pluto_switch index do
                     case 1: 
@@ -4738,6 +4782,10 @@ local function set_up_player_actions(pid)
         end
     end)
 
+    
+    menu.toggle(ls_hostile, translations.ghost_to_me, {translations.ghost_to_me_cmd}, "", function(on)
+        NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, on)
+    end)
 
     menu.action(chattrolls_root, translations.send_schizo_message, { translations.send_schizo_message_cmd}, translations.send_schizo_message_desc, function(click_type)
         util.toast(translations.schizo_pls_input)
@@ -4752,7 +4800,7 @@ local function set_up_player_actions(pid)
     end)
 
     menu.action(chattrolls_root, translations.fake_rac_detection_chat, {translations.fake_rac_detection_chat_cmd}, translations.fake_rac_detection_chat_desc, function(click_type)
-        local types = {'C1', 'I3', 'I1', 'N3', 'D3', 'S3'}
+        local types = {'I3', 'C1'}
         local det_type = types[math.random(1, #types)]
         chat.send_message('> ' .. PLAYER.GET_PLAYER_NAME(pid) .. translations.triggered_rac_1 .. det_type .. translations.triggered_rac_2, false, true, true)
     end)
@@ -5061,6 +5109,43 @@ menu.toggle_loop(randomizer_root, translations.random_chat_spam_content, {}, "",
     util.yield(100)
 end)
 
+menu.toggle_loop(randomizer_root, translations.random_all_sms_content, {}, "", function(on)
+    menu.trigger_commands("smstextall " .. random_string(254))
+    util.yield(100)
+end)
+
+
+menu.toggle_loop(speedrun_root, translations.speedrun_criminal_damage, {translations.speedrun_criminal_damage_cmd}, translations.seizure_warning, function(on)
+    if SCRIPT.GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(util.joaat("am_criminal_damage")) ~= 0 then
+        if memory.read_int(memory.script_local("am_criminal_damage", 2040 + 1+players.user()*7 + 2)) == 3 then
+            hash = util.joaat('titan')
+            local c = {}
+            c.x = 4497.2207
+            c.y = 8028.3086
+            c.z = -32.635174
+            request_model_load(hash) 
+            local v = entities.create_vehicle(hash, c, math.random(0, 270))
+            if v ~= 0 then
+                PED.SET_PED_INTO_VEHICLE(players.user_ped(), v, -1)
+                while not ENTITY.IS_ENTITY_IN_WATER(v) or not PED.IS_PED_IN_VEHICLE(players.user_ped(), v, false) do
+                    util.yield()
+                end
+                util.yield(5)
+                entities.delete_by_handle(v)
+            end
+        end
+    end
+end)
+
+menu.toggle_loop(speedrun_root, translations.speedrun_checkpoint_collection, {translations.speedrun_checkpoint_collection}, translations.seizure_warning, function(cp_speedrun_on)
+    if SCRIPT.GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(util.joaat("am_cp_collection")) ~= 0 then
+        local cp_blip = HUD.GET_NEXT_BLIP_INFO_ID(431)
+        if cp_blip ~= 0 then
+            local c = HUD.GET_BLIP_COORDS(cp_blip)
+            ENTITY.SET_ENTITY_COORDS(players.user_ped(), c.x, c.y, c.z, false, false, false, false)
+        end
+    end
+end)
 
 util.on_transition_finished(function()
     if random_name_spoof then
@@ -5573,7 +5658,7 @@ while true do
 
     if cinematic_autod then
         ls_log("auto cinema drive")
-        if CAM._IS_CINEMATIC_CAM_ACTIVE() then
+        if CAM.IS_CINEMATIC_CAM_INPUT_ACTIVE() then
             if not cinestate_active then
                 local goto_coords = get_waypoint_coords()
                 if goto_coords ~= nil then
@@ -5732,9 +5817,6 @@ while true do
                 dir['y'] = (c2['y'] - c1['y'])*1000
                 dir['z'] = (c2['z'] - c1['z'])*1000
             end
-            c1.x = c1['x']
-            c1.y = c1['y']
-            c1.z = c1['z']
             local ent = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, c1['x'], c1['y'], c1['z'], true, false, false)
             ENTITY.SET_ENTITY_NO_COLLISION_ENTITY(ent, players.user_ped(), false)
             ENTITY.APPLY_FORCE_TO_ENTITY(ent, 0, dir['x'], dir['y'], dir['z'], 0.0, 0.0, 0.0, 0, true, false, true, false, true)
