@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 8.58
+script_version = 8.59
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -187,12 +187,6 @@ if SCRIPT_MANUAL_START then
 end
 
 -- start organizing the MAIN lists (ones just at root level/right under it)
-
--- ref paths
-stand_vehicle_path_ref = menu.ref_by_command_name(translations.stand_vehicle_cmd)
-stand_self_path_ref = menu.ref_by_command_name(translations.stand_self_cmd)
-last_stand_weapon_command_ref = menu.ref_by_command_name(translations.tp_gun)
-
 -- BEGIN SELF SUBSECTIONS
 self_root = menu.ref_by_path('Self')
 menu.divider(self_root, translations.script_name_pretty)
