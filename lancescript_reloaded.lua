@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 8.59
+script_version = 8.60
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -53,7 +53,6 @@ setmetatable(translations, {
         return key
     end
 })
-
 
 local translation_dir_files = {}
 local just_translation_files = {}
@@ -188,26 +187,24 @@ end
 
 -- start organizing the MAIN lists (ones just at root level/right under it)
 -- BEGIN SELF SUBSECTIONS
-self_root = menu.ref_by_path('Self')
-menu.divider(self_root, translations.script_name_pretty)
+self_root = menu.list(menu.my_root(), translations.me, {translations.me_cmd}, translations.me_desc)
 chauffeur_root = menu.list(self_root, translations.chauffeur, {translations.chauffeur}, translations.chauffeur_desc)
-
-my_vehicle_root = menu.ref_by_path('Vehicle')
-menu.divider(my_vehicle_root, translations.script_name_pretty)
-
+my_vehicle_root = menu.list(self_root, translations.my_vehicle, {translations.my_vehicle_cmd}, translations.my_vehicle_desc)
 combat_root = menu.list(self_root, translations.combat, {translations.combat_cmd}, translations.combat_desc)
 custom_fov_root = menu.list(combat_root, translations.custom_fov, {translations.custom_fov_cmd}, translations.custom_fov_desc)
 
 -- END SELF SUBSECTIONS
 -- BEGIN ONLINE SUBSECTIONS
-online_root = menu.ref_by_path('Online')
-menu.divider(online_root, translations.script_name_pretty)
-
+online_root = menu.list(menu.my_root(), translations.online, {translations.online_cmd}, translations.online_desc)
 detections_root = menu.list(online_root, translations.detections, {translations.detections_cmd}, "")
 protections_root = menu.list(online_root, translations.protections, {translations.protections_cmd}, translations.protections_desc)
 randomizer_root = menu.list(online_root, translations.randomizer, {translations.randomizer_cmd}, translations.randomizer_desc)
 speedrun_root = menu.list(online_root, translations.speedrun, {translations.speedrun_cmd}, translations.speedrun_desc)
 chat_presets_root = menu.list(online_root, translations.chatpresets, {translations.chatpresets_cmd}, translations.chatpresets_desc)
+local players_shortcut_command = menu.ref_by_path('Players', 37)
+menu.action(menu.my_root(), translations.players_shortcut, {}, translations.players_shortcut_desc, function(click_type)
+    menu.trigger_command(players_shortcut_command)
+end)
 
 local function get_stat_by_name(stat_name, character)
     if character then 
@@ -225,35 +222,22 @@ end
 local function get_lapdances_amount(pid) 
     return memory.read_int(memory.script_global(1853348 + 1 + (pid * 834) + 205 + 55))
 end
-ap_root = menu.ref_by_path('Players>All Players')
-menu.divider(ap_root, translations.script_name_pretty)
-
-apfriendly_root = menu.ref_by_path('Players>All Players>Friendly')
-menu.divider(apfriendly_root, translations.script_name_pretty)
-
-
-aphostile_root = menu.ref_by_path('Players>All Players>Trolling')
-menu.divider(aphostile_root, translations.script_name_pretty)
-
-apneutral_root = ap_root
+ap_root = menu.list(online_root, translations.all_players, {translations.all_players_cmd}, "")
+apfriendly_root = menu.list(ap_root, translations.all_players_friendly, {translations.all_players_friendly_cmd}, "")
+aphostile_root = menu.list(ap_root, translations.all_players_hostile, {translations.all_players_hostile_cmd}, "")
+apneutral_root = menu.list(ap_root, translations.all_players_neutral, {translations.all_players_neutral_cmd}, "")
 ap_text_trolls_root = menu.list(apneutral_root, translations.text, {}, "")
-
-
-world_root = menu.ref_by_path('World')
-menu.divider(world_root, translations.script_name_pretty)
-entities_root = menu.list(world_root, translations.entities, {translations.entities_cmd}, translations.entities_desc)
+-- END ONLINE SUBSECTIONS
+-- BEGIN ENTITIES SUBSECTION
+entities_root = menu.list(menu.my_root(), translations.entities, {translations.entities_cmd}, translations.entities_desc)
 peds_root = menu.list(entities_root, translations.peds, {translations.peds_cmd}, translations.peds_desc)
 vehicles_root = menu.list(entities_root, translations.vehicles, {translations.vehicles_cmd}, translations.vehicles_desc)
 pickups_root = menu.list(entities_root, translations.pickups, {translations.pickups_cmd}, translations.pickups_desc)
-
-game_root = menu.ref_by_path('Game')
-menu.divider(game_root, translations.script_name_pretty)
-tweaks_root = menu.list(game_root, translations.gametweaks, {translations.gametweaks_cmd}, translations.gametweaks_desc)
+-- END ENTITIES SUBSECTION
+world_root = menu.list(menu.my_root(), translations.world, {translations.world_cmd}, translations.world_desc)
+tweaks_root = menu.list(menu.my_root(), translations.gametweaks, {translations.gametweaks_cmd}, translations.gametweaks_desc)
 god_graphics_root = menu.list(tweaks_root, translations.god_graphics, {""}, translations.god_graphics_desc)
-
-lancescript_root = menu.ref_by_path('Stand>Lua Scripts>Settings')
-menu.divider(lancescript_root, translations.script_name_pretty)
-menu.action(menu.my_root(), translations.where_did_everything_go, {}, translations.where_did_everything_go_text, function() end)
+lancescript_root = menu.list(menu.my_root(), translations.misc, {translations.misc_cmd}, translations.misc_desc)
 menu.action(menu.my_root(), translations.disclaimer, {}, translations.disclaimer_text, function() end)
 
 
@@ -2233,9 +2217,6 @@ objects_thread = util.create_thread(function (thr)
             end
             all_objects = entities.get_all_objects_as_pointers()
             for k, obj_ptr in pairs(all_objects) do
-                if not ENTITY.DOES_ENTITY_EXIST(obj) then 
-                    continue
-                end
                 --- PROJECTILE SHIT
                 local obj_model = entities.get_model_hash(obj_ptr)
                 if is_entity_a_projectile(obj_model) then
@@ -2293,9 +2274,6 @@ peds_thread = util.create_thread(function (thr)
             ls_log("Ped pool is being updated")
             all_peds = entities.get_all_peds_as_handles()
             for k,ped in pairs(all_peds) do
-                if not ENTITY.DOES_ENTITY_EXIST(ped) then 
-                    continue
-                end
                 if kill_aura then
                     if (kill_aura_peds and not PED.IS_PED_A_PLAYER(ped)) or (kill_aura_players and PED.IS_PED_A_PLAYER(ped)) then
                         local pid = NETWORK.NETWORK_GET_PLAYER_INDEX_FROM_PED(v)
@@ -2385,9 +2363,8 @@ peds_thread = util.create_thread(function (thr)
 
                     if apose_peds then 
                         if PED.IS_PED_IN_ANY_VEHICLE(ped, true) then
-                            TASK.TASK_LEAVE_ANY_VEHICLE(ped, 0, 16)
+                            TASK.CLEAR_PED_TASKS_IMMEDIATELY(ped)
                         end
-                        PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(ped, true)
                         request_anim_set("move_crawl")
                         PED.SET_PED_MOVEMENT_CLIPSET(ped, "move_crawl", -1)
                     end
@@ -2850,19 +2827,18 @@ menu.slider(v_phys_root, translations.blackhole_z_offset, {translations.blackhol
     hole_zoff = s
   end)
 
-function start_vehdance_thread()
+  function start_vehdance_thread()
     vehdance_thread = util.create_thread(function (thr)
-        local state = 1
+        local state = 2
         while true do
             if not veh_dance then
                 util.stop_thread()
             end
             for k,veh in pairs(all_vehicles) do
-                if not ENTITY.DOES_ENTITY_EXIST(veh) then 
-                    continue
-                end
                 local vhash = ENTITY.GET_ENTITY_MODEL(veh)
+                VEHICLE.SET_VEHICLE_MOD(veh, 38, VEHICLE.GET_NUM_VEHICLE_MODS(veh, 38)-1, false)
                 if player_cur_car ~= veh and not PED.IS_PED_A_PLAYER(VEHICLE.GET_PED_IN_VEHICLE_SEAT(veh, -1)) then
+                    request_control_of_entity(veh)
                     if vhash % 2 == 0 then
                         if state == 2 then
                             ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, 0.0, 1.0, state*2, 0.0, 0.0, 0, false, false, true, false, true)
@@ -2936,9 +2912,6 @@ vehicles_thread = util.create_thread(function (thr)
             ls_log("Vehicle pool is being updated")
             all_vehicles = entities.get_all_vehicles_as_handles()
             for k,veh in pairs(all_vehicles) do
-                if not ENTITY.DOES_ENTITY_EXIST(veh) then 
-                    continue
-                end
                 if l_e_v_on then
                     local size = get_model_size(ENTITY.GET_ENTITY_MODEL(veh))
                     if size.x > l_e_max_x or size.y > l_e_max_y or size.z > l_e_max_y then
@@ -3984,25 +3957,20 @@ vehicle_names = {translations.v_1, translations.v_2, translations.v_3, translati
 local function set_up_player_actions(pid)
     local childlock
     local atkgun = 0
-    local trolling_root = menu.ref_by_rel_path(menu.player_root(pid), "Trolling")
-    menu.divider(trolling_root, translations.script_name_pretty)
-    local ls_friendly = menu.ref_by_rel_path(menu.player_root(pid), "Friendly")
-    menu.divider(ls_friendly, translations.script_name_pretty)
-    local ls_neutral = menu.player_root(pid)
-    menu.divider(ls_neutral, translations.script_name_pretty)
-
+    menu.divider(menu.player_root(pid), translations.script_name_pretty)
+    local ls_friendly = menu.list(menu.player_root(pid), translations.ls_friendly, {translations.ls_friendly_cmd}, "")
+    local ls_hostile = menu.list(menu.player_root(pid), translations.ls_hostile, {translations.ls_hostile_cmd}, "")
+    local ls_neutral = menu.list(menu.player_root(pid), translations.ls_neutral, {translations.ls_neutral_cmd}, "")
     local spawnvehicle_root = menu.list(ls_friendly, translations.give_vehicle_root, {translations.give_vehicle_root_cmd}, "")
-    local explosions_root = menu.list(trolling_root, translations.projectiles_explosions, {translations.projectiles_explosions_cmd}, translations.projectiles_explosions_desc)
-    local playerveh_root = menu.ref_by_rel_path(menu.player_root(pid), "Trolling>Vehicle")
-    menu.divider(playerveh_root, translations.script_name_pretty)
-
-    local npctrolls_root = menu.list(trolling_root, translations.npc_trolling, {translations.npc_trolling_root_cmd}, "")
-    local soundtrolls_root = menu.list(trolling_root, translations.sound_trolling, {translations.sound_trolling_root_cmd}, "")
+    local explosions_root = menu.list(ls_hostile, translations.projectiles_explosions, {translations.projectiles_explosions_cmd}, translations.projectiles_explosions_desc)
+    local playerveh_root = menu.list(ls_hostile, translations.vehicle, {translations.p_vehicle_root_cmd}, translations.p_vehicle_root_desc)
+    local npctrolls_root = menu.list(ls_hostile, translations.npc_trolling, {translations.npc_trolling_root_cmd}, "")
+    local soundtrolls_root = menu.list(ls_hostile, translations.sound_trolling, {translations.sound_trolling_root_cmd}, "")
     local attackers_root = menu.list(npctrolls_root, translations.attackers, {translations.attackers_root_cmd}, "")
-    local chattrolls_root = menu.list(trolling_root, translations.chat_trolling, {translations.chat_trolling_cmd}, "")
-    local text_trolls_root = menu.list(trolling_root, translations.player_text_root, {translations.player_text_root_cmd}, "")
+    local chattrolls_root = menu.list(ls_hostile, translations.chat_trolling, {translations.chat_trolling_cmd}, "")
+    local text_trolls_root = menu.list(ls_hostile, translations.player_text_root, {translations.player_text_root_cmd}, "")
 
-    ram_root = menu.list(trolling_root, translations.ram_root, {translations.ram_root_cmd}, "")
+    ram_root = menu.list(ls_hostile, translations.ram_root, {translations.ram_root_cmd}, "")
 
     local tp_options = {translations.to_me, translations.to_waypoint, translations.maze_bank, translations.underwater, translations.high_up, translations.lsc, translations.scp_173, translations.large_cell, translations.luxury_autos_show_room, translations.underwater_child_lock}
     menu.list_action(playerveh_root, translations.teleport, {translations.teleport_cmd}, "", tp_options, function(index, value, click_type)
@@ -4278,7 +4246,7 @@ local function set_up_player_actions(pid)
         NETWORK.REMOVE_ALL_STICKY_BOMBS_FROM_ENTITY(car)
     end)
 
-    crush_root = menu.list(trolling_root, translations.crush_player, {translations.crush_player_root_cmd}, "")
+    crush_root = menu.list(ls_hostile, translations.crush_player, {translations.crush_player_root_cmd}, "")
 
     local custom_crush_model = "dump"
     menu.text_input(crush_root, translations.custom_crush_model, {translations.custom_crush_model_cmd}, translations.custom_crush_model_desc, function(on_input)
@@ -4302,12 +4270,12 @@ local function set_up_player_actions(pid)
     end)
 
     
-    menu.action(trolling_root, translations.ragdoll, {translations.ragdoll_cmd}, "", function(on)
+    menu.action(ls_hostile, translations.ragdoll, {translations.ragdoll_cmd}, "", function(on)
         local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), 0.0, 0.0, 2.8)
         FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 70, 100.0, false, true, 0.0)
     end)
 
-    menu.action(trolling_root, translations.heart_attack, {translations.heart_attack_cmd}, translations.heart_attack_desc, function(on)
+    menu.action(ls_hostile, translations.heart_attack, {translations.heart_attack_cmd}, translations.heart_attack_desc, function(on)
         local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), 0.0, 0.5, 1.0)
         local v = PED.GET_VEHICLE_PED_IS_USING(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid))
         if v ~= 0 then 
@@ -4322,7 +4290,7 @@ local function set_up_player_actions(pid)
     end)
 
     local obj_options = {translations.ramp, translations.barrier, translations.windmill, translations.radar}
-    menu.list_action(trolling_root, translations.spawn_object, {translations.spawn_object_cmd}, translations.spawn_object_desc, obj_options, function (index, value, click_type)
+    menu.list_action(ls_hostile, translations.spawn_object, {translations.spawn_object_cmd}, translations.spawn_object_desc, obj_options, function (index, value, click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         pluto_switch index do 
             case 1:
@@ -4480,7 +4448,7 @@ local function set_up_player_actions(pid)
     end)
     
 
-    menu.action(trolling_root, translations.chop_up, {translations.chop_up_cmd}, translations.chop_up_desc, function(click_type)
+    menu.action(ls_hostile, translations.chop_up, {translations.chop_up_cmd}, translations.chop_up_desc, function(click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
         coords.z = coords['z']+2.5
@@ -4497,7 +4465,7 @@ local function set_up_player_actions(pid)
         VEHICLE.SET_VEHICLE_ENGINE_ON(heli, true, true, true)
     end)
 
-    menu.toggle(trolling_root, translations.blackhole_target, {translations.blackhole_target_cmd}, translations.blackhole_target_desc, function(on)
+    menu.toggle(ls_hostile, translations.blackhole_target, {translations.blackhole_target_cmd}, translations.blackhole_target_desc, function(on)
 
         if on then
             if not blackhole then
@@ -4686,7 +4654,7 @@ local function set_up_player_actions(pid)
     end)
 
     --SET_VEHICLE_WHEEL_HEALTH(Vehicle vehicle, int wheelIndex, float health)
-    menu.action(trolling_root, translations.cage, {translations.cage_cmd}, "", function(click_type)
+    menu.action(ls_hostile, translations.cage, {translations.cage_cmd}, "", function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 0.0, 0.0)
         local hash = util.joaat("prop_test_elevator")
@@ -4699,19 +4667,16 @@ local function set_up_player_actions(pid)
         ENTITY.SET_ENTITY_ROTATION(cage2, 0.0, 0.0, 90.0, 1, true)
     end)
 
-    menu.action(trolling_root, translations.spawn_arena, {translations.spawn_arena_cmd}, translations.spawn_arena_desc, function(click_type)
+    menu.action(ls_hostile, translations.spawn_arena, {translations.spawn_arena_cmd}, translations.spawn_arena_desc, function(click_type)
         local coords = players.get_position(pid)
         local hash = util.joaat("xs_terrain_set_dystopian_06")
         request_model_load(hash)
-        local dust1 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z']-4, true, false, false)
-        ENTITY.FREEZE_ENTITY_POSITION(dust1, true)
-        local dust2 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z']+40, true, false, false)
-        ENTITY.SET_ENTITY_ROTATION(dust2, -180, 0, 0, 0)
-        ENTITY.FREEZE_ENTITY_POSITION(dust2, true)
+        local dust = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z']-4, true, false, false)
+        ENTITY.FREEZE_ENTITY_POSITION(dust, true)
     end)
 
     
-    menu.action(trolling_root, translations.spawn_brazil, {translations.spawn_brazil_cmd}, translations.spawn_brazil_desc, function(click_type)
+    menu.action(ls_hostile, translations.spawn_brazil, {translations.spawn_brazil_cmd}, translations.spawn_brazil_desc, function(click_type)
         local coords = players.get_position(pid)
         local hash = util.joaat("xs_terrain_dyst_ground_07")
         request_model_load(hash)
@@ -4779,7 +4744,7 @@ local function set_up_player_actions(pid)
         entities.delete_by_handle(voice_ped)
     end)
 
-    menu.action(trolling_root, translations.cargo_plane_trap, {translations.cargo_plane_trap_cmd}, translations.cargo_plane_trap_desc, function(click_type)
+    menu.action(ls_hostile, translations.cargo_plane_trap, {translations.cargo_plane_trap_cmd}, translations.cargo_plane_trap_desc, function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 0.0, 0.0)
         local hash = util.joaat("cargoplane")
@@ -4793,7 +4758,7 @@ local function set_up_player_actions(pid)
         end
     end)
 
-    menu.action(trolling_root, translations.mark_as_angry_planes_target, {translations.mark_as_angry_planes_target_cmd}, translations.mark_as_angry_planes_target_desc, function(on_input)
+    menu.action(ls_hostile, translations.mark_as_angry_planes_target, {translations.mark_as_angry_planes_target_cmd}, translations.mark_as_angry_planes_target_desc, function(on_input)
         angry_planes_tar = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if not angry_planes then
             util.toast(translations.angry_planes_auto)
@@ -4801,7 +4766,7 @@ local function set_up_player_actions(pid)
         end
     end)
 
-    menu.action(trolling_root, translations.make_wanted, {translations.make_wanted_cmd}, "", function(on_input)
+    menu.action(ls_hostile, translations.make_wanted, {translations.make_wanted_cmd}, "", function(on_input)
         local p_hash = util.joaat("s_m_y_swat_01")
         local c 
         local cop
@@ -4818,7 +4783,7 @@ local function set_up_player_actions(pid)
     end)
 
     
-    menu.toggle(trolling_root, translations.ghost_to_me, {translations.ghost_to_me_cmd}, "", function(on)
+    menu.toggle(ls_hostile, translations.ghost_to_me, {translations.ghost_to_me_cmd}, "", function(on)
         NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, on)
     end)
 
@@ -5621,8 +5586,8 @@ while true do
             c.y = 0.0
             c.z = 0.0
             dow_block = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, c['x'], c['y'], c['z'], true, false, false)
-            --ENTITY.SET_ENTITY_ALPHA(dow_block, 0)
-            --ENTITY.SET_ENTITY_VISIBLE(dow_block, false, 0)
+            ENTITY.SET_ENTITY_ALPHA(dow_block, 0)
+            ENTITY.SET_ENTITY_VISIBLE(dow_block, false, 0)
         end
     end
 
