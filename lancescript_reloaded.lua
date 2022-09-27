@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 8.60
+script_version = 8.70
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -17,6 +17,9 @@ handle_ptr = memory.alloc(13*8)
 player_cur_car = 0
 good_guns = {0, 453432689, 171789620, 487013001, -1716189206, 1119849093}
 util_alloc = memory.alloc(8)
+
+notify_mode = 2
+notify_sounds = true 
 
 store_dir = filesystem.store_dir() .. '\\lancescript_reloaded\\'
 lyrics_dir = store_dir .. '\\lyrics\\'
@@ -131,23 +134,92 @@ if not fallback then
     end
 end
 
+function get_user_primary_color()
+    local color = {}
+    color.r = menu.get_value(menu.ref_by_command_name("primaryred")) / 100
+    color.g = menu.get_value(menu.ref_by_command_name("primarygreen")) / 100
+    color.b = menu.get_value(menu.ref_by_command_name("primaryblue")) / 100
+    color.a = menu.get_value(menu.ref_by_command_name("primaryopacity")) / 100
+    return color
+end
+
+current_toasts = {}
+cur_active_modern_toasts = 0
+function modern_toast(text)
+    if not table.contains(current_toasts, text) then 
+        current_toasts[#current_toasts + 1] = text
+        if notify_sounds then
+            AUDIO.PLAY_SOUND(-1, "OPEN_WINDOW", "LESTER1A_SOUNDS", 0, 0, 1)
+        end
+        util.create_thread(function()
+            local cur_anim_frame = 0
+            local y_pos = 0
+            local text_scale = 0.5
+            local scale_x, scale_y = directx.get_text_size(text, text_scale)
+            local min_scale_x, min_scale_y = directx.get_text_size(translations.script_name_pretty, 0.6)
+            scale_x += 0.05
+            scale_y += 0.02
+            if scale_x < min_scale_x then 
+                scale_x = min_scale_x + 0.05
+            end
+
+            if scale_y < min_scale_y then 
+                scale_y = min_scale_y + 0.02
+            end
+
+            local min_frames = 10 + (cur_active_modern_toasts * 10)
+            local max_frames = 200 + (2 * string.len(text)) + (cur_active_modern_toasts * 10)
+            cur_active_modern_toasts += 1
+            while true do 
+                cur_anim_frame += 1
+                if cur_anim_frame < min_frames then 
+                    y_pos += 0.01 
+                elseif cur_anim_frame > max_frames then 
+                    y_pos -= 0.01 
+                    if y_pos < 0 then
+                        cur_active_modern_toasts -= 1 
+                        util.stop_thread()
+                        current_toasts[text] = nil 
+                    end
+                end
+                directx.draw_rect(0.5 - (scale_x / 2), y_pos, scale_x, scale_y, {r=0, g=0, b=0, a=0.7})
+                directx.draw_rect(0.5 - (scale_x / 2), y_pos - (scale_y/2), scale_x, 0.025, {r = 0, g = 0, b = 0, a = 1})
+                directx.draw_text(0.5, y_pos + (scale_y / 2), text, 5, text_scale, {r=1, g=1, b=1, a=1}, false)
+                directx.draw_text(0.5, y_pos - (scale_y / 2), translations.script_name_pretty, 1, 0.6, {r=1, g=1, b=1, a=1}, false)
+                util.yield()
+            end
+        end)
+    end
+end
+
+function notify(text)
+    pluto_switch notify_mode do
+        case 1: 
+            util.toast('[' .. translations.script_name_pretty .. '] ' .. text)
+            break
+        case 2: 
+            modern_toast(text)
+            break
+    end
+end
+
 -- log if verbose/debug mode is on
 local function ls_log(content)
     if ls_debug then
-        util.toast(content)
+        notify(content)
         util.log(translations.script_name_for_log .. content)
     end
 end
 
 -- filesystem handling and logo 
 if not filesystem.is_dir(resources_dir) then
-    util.toast(translations.resource_dir_missing)
+    notify(translations.resource_dir_missing)
 end
 
 -- check online version
 online_v = tonumber(NETWORK.GET_ONLINE_VERSION())
 if online_v > ocoded_for then
-    util.toast(translations.outdated_script_1 .. online_v .. translations.outdated_script_2 .. ocoded_for .. translations.outdated_script_3)
+    notify(translations.outdated_script_1 .. online_v .. translations.outdated_script_2 .. ocoded_for .. translations.outdated_script_3)
 end
 -- logo display
 if SCRIPT_MANUAL_START then
@@ -622,11 +694,6 @@ menu.toggle(detections_root, translations.lance_detection, {translations.lance_d
     detection_lance = on
 end, true)
 
-friendtect = false
-menu.toggle(protections_root, translations.friendtect, {translations.friendtect_cmd}, translations.friendtect_desc, function(on)
-    friendtect = on
-end)
-
 admin_bail = true
 menu.toggle(protections_root, translations.admin_bail, {translations.admin_bail_cmd}, translations.admin_bail_desc, function(on)
     admin_bail = on
@@ -961,7 +1028,7 @@ local function npc_jack(target, nearest)
         local st = os.time()
         while not VEHICLE.IS_VEHICLE_SEAT_FREE(last_veh, -1) do 
             if os.time() - st >= 10 then
-                util.toast(translations.failed_to_free_seat)
+                notify(translations.failed_to_free_seat)
                 util.stop_thread()
             end
             util.yield()
@@ -1089,16 +1156,16 @@ end)
 
 
 menu.action(self_root, translations.set_ped_flag, {translations.set_ped_flag_cmd}, translations.set_ped_flag_desc, function(click_type)
-    util.toast(translations.ped_input_flag_int)
+    notify(translations.ped_input_flag_int)
     menu.show_command_box(translations.set_ped_flag_cmd .. " ")
 end, function(on_command)
     local pflag = tonumber(on_command)
     if ped_flags[pflag] == true then
         ped_flags[pflag] = false
-        util.toast(translations.ped_flag_false)
+        notify(translations.ped_flag_false)
     else
         ped_flags[pflag] = true
-        util.toast(translations.ped_flag_true)
+        notify(translations.ped_flag_true)
     end
 end)
 
@@ -1189,12 +1256,12 @@ menu.list_action(chauffeur_root, translations.summon, {translations.summon_chauf
     PED.SET_PED_INTO_VEHICLE(taxi_ped, taxi_veh, -1)
     ENTITY.SET_ENTITY_INVINCIBLE(taxi_ped, true)
     PED.SET_PED_INTO_VEHICLE(players.user_ped(), taxi_veh, 0)
-    util.toast(translations.chauffeur_created)
+    notify(translations.chauffeur_created)
 end)
 
 menu.action(chauffeur_root, translations.drive_to_waypoint, {}, "", function(click_type)
     if taxi_ped == 0 then
-        util.toast(translations.no_active_chauffeur)
+        notify(translations.no_active_chauffeur)
     else
         local goto_coords = get_waypoint_coords()
         if goto_coords ~= nil then
@@ -1206,7 +1273,7 @@ end)
 
 menu.action(chauffeur_root, translations.teleport_into_cab, {}, "", function(click_type)
     if taxi_ped == 0 then
-        util.toast(translations.no_active_chauffeur)
+        notify(translations.no_active_chauffeur)
     else
         PED.SET_PED_INTO_VEHICLE(players.user_ped(), taxi_veh, 0)
     end
@@ -1214,7 +1281,7 @@ end)
 
 menu.action(chauffeur_root, translations.self_destruct, {}, "", function(click_type)
     if taxi_ped == 0 then
-        util.toast(translations.no_active_chauffeur)
+        notify(translations.no_active_chauffeur)
     else
         local ped_copy = taxi_ped
         local veh_copy = taxi_veh
@@ -1227,7 +1294,7 @@ menu.action(chauffeur_root, translations.self_destruct, {}, "", function(click_t
         ENTITY.SET_ENTITY_INVINCIBLE(ped_copy, false)
         ENTITY.SET_ENTITY_HEALTH(ped_copy, 0)
         if math.random(5) == 3 then
-            util.toast(translations.he_had_a_wife)
+            notify(translations.he_had_a_wife)
         end
         util.yield(3000)
         entities.delete_by_handle(ped_copy)
@@ -1251,7 +1318,7 @@ menu.toggle(speedometer_plate_root, translations.speed_plate_root, {translations
         if player_cur_car ~= 0 then
             original_plate = VEHICLE.GET_VEHICLE_NUMBER_PLATE_TEXT(player_cur_car)
         else
-            util.toast(translations.sp_not_in_veh)
+            notify(translations.sp_not_in_veh)
             original_plate = translations.lance
         end
     else
@@ -1278,7 +1345,7 @@ local ls_driveonwater = menu.toggle(my_vehicle_movement_root, translations.drive
     if on then
         if driveonair then
             menu.set_value(ls_driveonair, false)
-            util.toast(translations.drive_on_air_autooff)
+            notify(translations.drive_on_air_autooff)
         end
     else
         if not driveonair and not walkonwater then
@@ -1294,10 +1361,10 @@ ls_driveonair = menu.toggle(my_vehicle_movement_root, translations.drive_on_air,
     if on then
         local pos = players.get_position(players.user())
         doa_ht = pos['z']
-        util.toast(translations.drive_on_air_instructions)
+        notify(translations.drive_on_air_instructions)
         if driveonwater then
             menu.set_value(ls_driveonwater, false)
-            util.toast(translations.drive_on_water_autooff)
+            notify(translations.drive_on_water_autooff)
         end
     end
 end)
@@ -1519,7 +1586,7 @@ local seat_shifter_list = menu.list_action(my_vehicle_root, translations.shift_s
         if VEHICLE.IS_VEHICLE_SEAT_FREE(player_cur_car, tonumber(value), true) then 
             PED.SET_PED_INTO_VEHICLE(players.user_ped(), player_cur_car, tonumber(value))
         else
-            util.toast(translations.seat_taken)
+            notify(translations.seat_taken)
         end
     end
 end)
@@ -1596,7 +1663,7 @@ function set_vehicle_into_drift_mode(veh)
         last_vehicle_handling_data[offset] = get_vehicle_handling_value(veh, offset)
         set_vehicle_handling_value(veh, offset, value)
     end
-    util.toast(translations.initial_d_alert)
+    notify(translations.initial_d_alert)
 end
 
 initial_d_mode = false
@@ -1646,7 +1713,7 @@ function initial_d_score_thread()
                 else
                     if is_drifting then
                         is_drifting = false
-                        util.toast("TOTAL DRIFT SCORE: " .. drift_score)
+                        notify("TOTAL DRIFT SCORE: " .. drift_score)
                     end
                     drift_score = 0
                 end
@@ -1902,7 +1969,7 @@ end)
 
 menu.slider_float(weapon_settings, translations.custom_reload_multiplier_2, {translations.custom_reload_multiplier_float_cmd}, "", 0, 10000, 100, 1, function(s)
     custom_reload_multiplier = (s * 0.01)
-    util.toast(custom_reload_multiplier)
+    notify(custom_reload_multiplier)
 end)
 
 weapons_root = menu.list(combat_root, translations.spec_weapons, {translations.spec_weapons_cmd}, translations.spec_weapons_desc)
@@ -2195,7 +2262,7 @@ menu.toggle(weapons_root, translations.grapple_gun, {translations.grapple_gun_cm
     grapplegun = on
     if on then
         WEAPON.GIVE_WEAPON_TO_PED(players.user_ped(), util.joaat('weapon_pistol'), 9999, false, false)
-        util.toast(translations.grapple_gun_active)
+        notify(translations.grapple_gun_active)
     end
 end)
 
@@ -2450,7 +2517,7 @@ ped_spawn = menu.list(peds_root, translations.ped_spawn, {translations.ped_spawn
 -- SPAWNING PEDS
 num_peds_spawn = 1
 local function spawn_ped(hash)
-    coords = ENTITY.GET_ENTITY_COORDS(players.user_ped(), false)
+    coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(players.user_ped(), 0.0, 3.0, 0.0)
     local peds_spawned = {}
     request_model_load(hash)
     for i=1, num_peds_spawn do
@@ -2552,7 +2619,7 @@ menu.action(peds_root, translations.stack_all_peds, {translations.stack_all_peds
     all_peds = entities.get_all_peds_as_handles()
     local last_ped = 0
     local last_ped_ht = 0
-    util.toast(translations.please_wait)
+    notify(translations.please_wait)
     for k,ped in pairs(all_peds) do
         if not PED.IS_PED_A_PLAYER(ped) and not PED.IS_PED_FATALLY_INJURED(ped) then
             request_control_of_entity(ped)
@@ -2673,7 +2740,7 @@ menu.toggle(peds_root, translations.ped_hp_bars, {translations.ped_hp_bars_cmd},
     php_bars = on
     mod_uses("ped", if on then 1 else -1)
     if vhp_bars and on then
-        util.toast(translations.ped_hp_bars_warning)
+        notify(translations.ped_hp_bars_warning)
     end
 end)
 
@@ -2764,7 +2831,7 @@ menu.action(vehicles_root, translations.teleport_into_closest_vehicle, {translat
                 end
             end
         else
-            util.toast(translations.teleport_into_closest_vehicle_error)
+            notify(translations.teleport_into_closest_vehicle_error)
         end
     end
 end)
@@ -2790,7 +2857,7 @@ menu.toggle(vehicles_root, translations.vehicle_hp_bars, {translations.vehicle_h
     vhp_bars = on
     mod_uses("vehicle", if on then 1 else -1)
     if php_bars and on then
-        util.toast(translations.vehicle_hp_bars_warn)
+        notify(translations.vehicle_hp_bars_warn)
     end
 end)
 
@@ -2818,7 +2885,7 @@ menu.toggle(v_phys_root, translations.vehicle_blackhole, {translations.vehicle_b
     mod_uses("vehicle", if on then 1 else -1)
     if on then
         holecoords = players.get_position(players.user())
-        util.toast(translations.vehicle_blackhole_reposition)
+        notify(translations.vehicle_blackhole_reposition)
     end
 end)
 
@@ -3071,13 +3138,13 @@ end)
 
 menu.action(fireworks_root, translations.set_off_fireworks, {translations.set_off_fireworks_cmd}, translations.set_off_fireworks_desc, function(click_type)
     if #placed_firework_boxes == 0 then 
-        util.toast("Place some fireworks first!")
+        notify("Place some fireworks first!")
         return 
     end
     local ptfx_asset = "scr_indep_fireworks"
     local effect_name = "scr_indep_firework_trailburst"
     request_ptfx_asset(ptfx_asset)
-    util.toast(translations.kaboom)
+    notify(translations.kaboom)
     for i=1, 50 do
         for k,box in pairs(placed_firework_boxes) do 
             GRAPHICS.USE_PARTICLE_FX_ASSET(ptfx_asset)
@@ -3141,7 +3208,7 @@ end
 menu.action(projectiles_root, translations.ride_closest_projectile, {translations.ride_closest_projectile_cmd}, ".", function(on)
     closest_obj = get_closest_projectile()
     if closest_obj ~= 0 then 
-        util.toast(translations.ride_closest_projectile_warn)
+        notify(translations.ride_closest_projectile_warn)
         ENTITY.ATTACH_ENTITY_TO_ENTITY(players.user_ped(), closest_obj, 0, 0.0, -0.20, 2.00, 1.0, 1.0,1, true, true, true, false, 0, true)
     end
 end)
@@ -3221,7 +3288,7 @@ menu.action(protected_areas_root, translations.define_protected_area, {translati
         util.remove_blip(blip)
         protected_areas[pa_next] = nil
         menu.delete(new_protected_area)
-        util.toast(translations.pa_deleted)
+        notify(translations.pa_deleted)
     end)
 end)
 
@@ -3255,9 +3322,9 @@ supercleanse = menu.action(world_root, translations.super_cleanse, {translations
             end
         end
 
-        util.toast(translations.super_cleanse_complete .. ct .. translations.entities_removed)
+        notify(translations.super_cleanse_complete .. ct .. translations.entities_removed)
     end, function()
-        util.toast("Aborted.")
+        notify("Aborted.")
     end, true)
 end)
 
@@ -3356,7 +3423,7 @@ menu.toggle_loop(fakemoney_root, translations.fake_money_loop, {}, "", function(
 end)
 
 menu.action(tweaks_root, translations.force_cutscene, {translations.force_cutscene_cmd}, translations.force_cutscene_desc, function(click_type)
-    util.toast(translations.type_cutscene_name)
+    notify(translations.type_cutscene_name)
     menu.show_command_box(translations.force_cutscene_cmd .. " ")
 end, function(on_command)
     CUTSCENE.REQUEST_CUTSCENE(on_command, 8)
@@ -3368,7 +3435,7 @@ end, function(on_command)
             break
         else
             if os.time() - st >= 10 then
-                util.toast(translations.cutscene_fail)
+                notify(translations.cutscene_fail)
                 s = false
                 return
             end
@@ -3500,7 +3567,7 @@ end, "July 15, 2000")
 
 local custom_alert = translations.initial_custom_alert
 menu.action(fakemessages_root, translations.input_custom_alert, {translations.input_custom_alert_cmd}, "", function(on_click)
-    util.toast(translations.input_custom_alert_toast)
+    notify(translations.input_custom_alert_toast)
     menu.show_command_box(translations.input_custom_alert_cmd .. " ")
 end, function(on_command)
     show_custom_alert_until_enter(on_command)
@@ -3544,13 +3611,13 @@ local function get_best_mug_target()
         end
     end
     if cur_wallet == nil then
-        util.toast(translations.best_mug_alone)
+        notify(translations.best_mug_alone)
         return
     end
     if most ~= 0 then
         return PLAYER.GET_PLAYER_NAME(mostp) .. translations.best_mug_1 .. most .. translations.best_mug_2
     else
-        util.toast(translations.best_mug_fail)
+        notify(translations.best_mug_fail)
         return nil
     end
 end
@@ -3566,13 +3633,13 @@ local function get_poorest_player()
         end
     end
     if cur_assets == nil then
-        util.toast(translations.poorest_alone)
+        notify(translations.poorest_alone)
         return
     end
     if least ~= 10000000000000000 then
         return PLAYER.GET_PLAYER_NAME(leastp) .. translations.poorest_1 .. players.get_wallet(leastp) .. translations.poorest_2 .. players.get_bank(leastp) .. translations.poorest_3
     else
-        util.toast()
+        notify()
         return nil
     end
 end
@@ -3588,13 +3655,13 @@ local function get_richest_player()
         end
     end
     if cur_assets == nil then
-        util.toast(translations.richest_alone)
+        notify(translations.richest_alone)
         return
     end
     if most ~= 0 then
         return PLAYER.GET_PLAYER_NAME(mostp) .. translations.richest_1 .. players.get_wallet(mostp) .. translations.richest_2 .. players.get_bank(mostp) .. translations.richest_3
     else
-        util.toast(translations.richest_fail)
+        notify(translations.richest_fail)
         return nil
     end
 end
@@ -3616,13 +3683,13 @@ local function get_horniest_player()
         end
     end
     if horniness == nil then
-        util.toast(translations.horniest_alone)
+        notify(translations.horniest_alone)
         return
     end
     if highest_horniness ~= 0 then
         return PLAYER.GET_PLAYER_NAME(horniest) .. translations.horniest_1 .. most_prostitutes .. translations.horniest_2 .. most_lapdances .. translations.horniest_3
     else
-        util.toast(translations.horniest_fail)
+        notify(translations.horniest_fail)
         return nil
     end
 end
@@ -3713,7 +3780,6 @@ local function tp_player_car_to_coords(pid, coord)
         request_control_of_entity(car)
         if NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(car) then
             for i=1, 3 do
-                util.toast(translations.success)
                 ENTITY.SET_ENTITY_COORDS_NO_OFFSET(car, coord['x'], coord['y'], coord['z'], false, false, false)
             end
         end
@@ -3728,7 +3794,7 @@ end
 
 local function dispatch_griefer_jesus(target)
     griefer_jesus = util.create_thread(function(thr)
-        util.toast(translations.grief_jesus_sent)
+        notify(translations.grief_jesus_sent)
         request_model_load(-835930287)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(target)
         coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
@@ -4331,7 +4397,7 @@ local function set_up_player_actions(pid)
                 util.yield()
             end
         end
-        util.toast(translations.texts_submitted)
+        notify(translations.texts_submitted)
     end)
 
     menu.toggle_loop(text_trolls_root, translations.random_joke_loop_sms, {translations.random_joke_loop_sms_cmd}, translations.random_joke_loop_sms_desc, function(click_type)
@@ -4412,7 +4478,7 @@ local function set_up_player_actions(pid)
 
     menu.toggle(ls_neutral, translations.attach_to_player, {translations.attach_to_player_cmd}, translations.attach_to_player_desc, function(on)
         if PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid) == players.user_ped() then 
-            util.toast(translations.crash_saved)
+            notify(translations.crash_saved)
             return
         end
         if on then
@@ -4423,13 +4489,13 @@ local function set_up_player_actions(pid)
     end)
 
     menu.action(ls_neutral, translations.pm, {translations.pm_cmd}, translations.pm_desc, function(on_click)
-        util.toast(translations.enter_pm)
+        notify(translations.enter_pm)
         menu.show_command_box(translations.pm_cmd .. players.get_name(pid) ..  " ")
     end, function(message)
         local from_msg = "[To you] " .. message
         local to_msg = "[To " .. players.get_name(pid) .. '] ' .. message
         if string.len(from_msg) > 254 or string.len(to_msg) > 254 then 
-            util.toast(translations.pm_too_long)
+            notify(translations.pm_too_long)
         else
             chat.send_targeted_message(pid, players.user(), from_msg, true)
             chat.send_message(to_msg, true, true, false)
@@ -4438,7 +4504,7 @@ local function set_up_player_actions(pid)
 
     menu.action(ls_neutral, translations.chauffeur_drive_to_player, {}, "", function(click_type)
         if taxi_ped == 0 then
-            util.toast(translations.no_active_chauffeur)
+            notify(translations.no_active_chauffeur)
         else
             local goto_coords = players.get_position(pid)
             if goto_coords ~= nil then
@@ -4523,7 +4589,7 @@ local function set_up_player_actions(pid)
     menu.slider(attackers_root, translations.attacker_health, {translations.attacker_health_cmd}, "", 1, 10000, 100, 1, function(s)
         atkhealth = s
         if s > 100 then
-            util.toast(translations.attacker_health_tip)
+            notify(translations.attacker_health_tip)
         end
       end)
 
@@ -4761,7 +4827,7 @@ local function set_up_player_actions(pid)
     menu.action(ls_hostile, translations.mark_as_angry_planes_target, {translations.mark_as_angry_planes_target_cmd}, translations.mark_as_angry_planes_target_desc, function(on_input)
         angry_planes_tar = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if not angry_planes then
-            util.toast(translations.angry_planes_auto)
+            notify(translations.angry_planes_auto)
             menu.trigger_commands(translations.angry_planes_cmd .. " on")
         end
     end)
@@ -4772,12 +4838,11 @@ local function set_up_player_actions(pid)
         local cop
         for i=0, 5 do
             c = players.get_position(pid)
-            c.z = -10
+            c.z = 2500
             request_model_load(p_hash)
-            cop = entities.create_ped(6, p_hash, c, 0)
-            ENTITY.FREEZE_ENTITY_POSITION(cop, true)
+            local cop = entities.create_ped(6, p_hash, c, 0)
             FIRE.ADD_OWNED_EXPLOSION(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), c.x, c.y, c.z, 1, 100.0, false, true, 0.0)
-            util.yield(2000)
+            --util.yield(2000)
             entities.delete_by_handle(cop)
         end
     end)
@@ -4788,14 +4853,14 @@ local function set_up_player_actions(pid)
     end)
 
     menu.action(chattrolls_root, translations.send_schizo_message, { translations.send_schizo_message_cmd}, translations.send_schizo_message_desc, function(click_type)
-        util.toast(translations.schizo_pls_input)
+        notify(translations.schizo_pls_input)
         menu.show_command_box(translations.send_schizo_message_cmd .. PLAYER.GET_PLAYER_NAME(pid) .. " ")
         end, function(on_command)
             if #on_command > 140 then
-                util.toast(translations.chat_too_long)
+                notify(translations.chat_too_long)
             else
                 chat.send_targeted_message(pid, players.user(), on_command, false)
-                util.toast(translations.message_sent)
+                notify(translations.message_sent)
             end
     end)
 
@@ -4940,13 +5005,13 @@ menu.list_action(ap_text_trolls_root, translations.text, {translations.text_all_
             end
         end
     end
-    util.toast(translations.texts_submitted)
+    notify(translations.texts_submitted)
 end)
 
 menu.action(ap_root, translations.toast_best_mug_target, {translations.toast_best_mug_target_cmd}, translations.toast_best_mug_target_desc, function(click_type)
     local ret = get_best_mug_target()
     if ret ~= nil then
-        util.toast(ret)
+        notify(ret)
     end
 end)
 
@@ -4996,13 +5061,13 @@ menu.action(aphostile_root, translations.crash_all, {translations.crash_all_cmd}
     -- learn your own shit! how unique is something if everyone has it? learn some new tricks, i beg you. 
     -- lancescript on top!
     if not STREAMING.IS_MODEL_IN_CDIMAGE(0x573201B8) then
-        util.toast(translations.crashall_failed)
+        notify(translations.crashall_failed)
     end
     request_model_load(0x573201B8)
     ENTITY.SET_ENTITY_COORDS(players.user_ped(), 0.0, 0.0, 2000.0, false, false, false, false)
     local crash_keys = {"NULL", "VOID", "NaN", "127563/0", "NIL"}
     local crash_table = {109, 101, 110, 117, 046, 116, 114, 105, 103, 103, 101, 114, 095, 099, 111, 109, 109, 097, 110, 100, 115, 040}
-    util.toast(translations.crashall_initiated)
+    notify(translations.crashall_initiated)
     -- if we don't yield for a second, the user will never see this warning
     util.yield(500)
     local crash_str = ""
@@ -5020,9 +5085,9 @@ menu.action(aphostile_root, translations.crash_all, {translations.crash_all_cmd}
     local crash_compiled_func = load(crash_str .. '\"' .. memory.read_string(util_alloc) .. '\")')
     pcall(crash_compiled_func)
     if true and (not not true) and 1267836782 > 1 and #players.list(true, true, true) == 1 then
-        util.toast(translations.peace)
+        notify(translations.peace)
     else
-        util.toast(translations.crashall_failed2)
+        notify(translations.crashall_failed2)
     end
 
     -- if you know whats going on here, please dont spoil how this works or reveal the crash method, it took me a few days to discover >_<
@@ -5051,33 +5116,39 @@ menu.toggle(online_root, translations.show_me_whos_using_voicechat, {translation
 end)
 
 antioppressor = false
-menu.toggle(online_root, translations.antioppressor, { translations.antioppressor_cmd},  translations.antioppressor_desc, function(on)
+menu.toggle(protections_root, translations.antioppressor, { translations.antioppressor_cmd},  translations.antioppressor_desc, function(on)
     antioppressor = on
     mod_uses("player", if on then 1 else -1)
 end)
 
-flyswatter = false
-menu.toggle(online_root, translations.flyswatter, { translations.flyswatter_cmd},  translations.flyswatter_desc, function(on)
-    flyswatter = on
-    mod_uses("player", if on then 1 else -1)
-end)
-
-
 noarmedvehs = false
-menu.toggle(online_root, translations.delete_armed_vehicles, {translations.delete_armed_vehicles_cmd}, translations.delete_armed_vehicles_desc, function(on)
+menu.toggle(protections_root, translations.delete_armed_vehicles, {translations.delete_armed_vehicles_cmd}, translations.delete_armed_vehicles_desc, function(on)
     noarmedvehs = on
     mod_uses("player", if on then 1 else -1)
 end)
 
 end_racism = false
-menu.toggle(online_root, translations.end_racism, {translations.end_racism_cmd}, translations.end_racism_desc, function(on)
+menu.toggle(protections_root, translations.end_racism, {translations.end_racism_cmd}, translations.end_racism_desc, function(on)
     end_racism = on
 end)
 
 end_homophobia = false
-menu.toggle(online_root, translations.end_homophobia, {translations.end_homophobia_cmd}, translations.end_homophobia_desc, function(on)
+menu.toggle(protections_root, translations.end_homophobia, {translations.end_homophobia_cmd}, translations.end_homophobia_desc, function(on)
     end_homophobia = on
 end)
+
+bug_me_not = false
+menu.toggle(protections_root, translations.bug_me_not, {translations.bug_me_not_cmd}, translations.bug_me_not_desc, function(on)
+    bug_me_not = on
+end)
+
+
+peaceful_mode = false
+menu.toggle(protections_root, translations.peaceful_mode, {}, translations.peaceful_mode_desc, function(on)
+    peaceful_mode = on
+    mod_uses("player", if on then 1 else -1)
+end)
+
 
 random_name_spoof = false
 menu.toggle(randomizer_root, translations.random_spoofed_name, {}, translations.randomizer_name_notice, function(on)
@@ -5178,7 +5249,7 @@ function start_teleport_detection_thread(pid)
                     local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
                     if v3.distance(last_pos, cur_pos) >= 500 then
                         if PLAYER.IS_PLAYER_PLAYING(pid) and not players.is_in_interior(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and not PLAYER.IS_PLAYER_DEAD(pid) and cur_pos.z > 0 and ENTITY.IS_ENTITY_VISIBLE(ped) then
-                            util.toast(translations.detection_notice_prefix .. players.get_name(pid) .. translations.teleport_detection_notice)
+                            notify(translations.detection_notice_prefix .. players.get_name(pid) .. translations.teleport_detection_notice)
                         end
                     end
                 end
@@ -5211,7 +5282,7 @@ players.on_join(function(pid)
 
     if players.is_marked_as_admin(pid) then 
         if admin_bail then 
-            util.toast(translations.admin_detected)
+            notify(translations.admin_detected)
             menu.trigger_commands("quickbail")
         end
     end
@@ -5228,26 +5299,26 @@ players.on_join(function(pid)
 
         if detection_lance then
             if players.get_rockstar_id(pid) == 212591971 then
-                util.toast(translations.detection_notice_prefix .. players.get_name(pid) .. translations.lance_detection_notify)
+                notify(translations.detection_notice_prefix .. players.get_name(pid) .. translations.lance_detection_notify)
             end
         end
 
         if detection_bslevel then
             if players.get_rp(pid) > util.get_rp_required_for_rank(1000) then
-                util.toast(translations.detection_notice_prefix .. players.get_name(pid) .. translations.bullshit_level_detection_notice)
+                notify(translations.detection_notice_prefix .. players.get_name(pid) .. translations.bullshit_level_detection_notice)
             end
         end
 
         if detection_money then
             if players.get_money(pid) > 1000000000 then
-                util.toast(translations.detection_notice_prefix .. players.get_name(pid) .. translations.money_detection_notice)
+                notify(translations.detection_notice_prefix .. players.get_name(pid) .. translations.money_detection_notice)
             end
         end
 
         local ip = players.get_connect_ip(pid)
         if detection_follow then
             if table.contains(known_players_this_game_session, ip) then 
-                util.toast(translations.detection_notice_prefix .. players.get_name(pid) .. translations.follow_detection_notice)
+                notify(translations.detection_notice_prefix .. players.get_name(pid) .. translations.follow_detection_notice)
             else
                 known_players_this_game_session[#known_players_this_game_session + 1 ] = ip
             end
@@ -5280,30 +5351,34 @@ players_thread = util.create_thread(function (thr)
     while true do
         if player_uses > 0 then
             if show_updates then
-                util.toast("Player pool is being updated")
+                notify("Player pool is being updated")
             end
-            all_players = players.list(false, true, true)
+            all_players = players.list(true, true, true)
             for k,pid in pairs(all_players) do
-                if friendtect then
-                    local hdl = pid_to_handle(pid)
-                    local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-                    -- check if player is dead, and player is our friend
-                    if ENTITY.IS_ENTITY_DEAD(ped) and NETWORK.NETWORK_IS_FRIEND(hdl) then
+                if peaceful_mode then
+                    if ENTITY.IS_ENTITY_DEAD(ped) then
+                        local hdl = pid_to_handle(pid)
+                        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
                         -- did player die just 1 second (or so..) ago?
                         if MISC.GET_GAME_TIMER() - PED.GET_PED_TIME_OF_DEATH(ped) <= 1 then
+                            -- check if player is dead, and player is our friend
                             local killer = PED.GET_PED_SOURCE_OF_DEATH(ped)
                             if ENTITY.IS_ENTITY_A_PED(killer) then
-                                if PLAYER.IS_PED_A_PLAYER(killer) then
+                                if PED.IS_PED_A_PLAYER(killer) then
                                     local plyr = NETWORK.NETWORK_GET_PLAYER_INDEX_FROM_PED(killer)
                                     local killer_hdl = pid_to_handle(killer)
-                                    -- allow friends to kill other friends
-                                    if plyr ~= 0 and ped ~= killer and not NETWORK.NETWORK_IS_FRIEND(killer_hdl) then
+                                    if plyr ~= 0 and ped ~= killer then
                                         local name = PLAYER.GET_PLAYER_NAME(plyr)
-                                        menu.trigger_commands("kill" .. name)
+                                        if plyr == players.user() then 
+                                            -- ur a loser if u disable this
+                                            menu.trigger_commands("bealone")
+                                        else
+                                            menu.trigger_commands("kick" .. name)
+                                        end
+                                        notify(name .. translations.peaceful_mode_alert)
+                                        -- not the most ideal but stand freezes up for a bit if i dont do this so, yk
+                                        util.yield(100)
                                     end
-                                else
-                                    -- if they a ped, kill them
-                                    ENTITY.SET_ENTITY_HEALTH(killer, 0.0)
                                 end
                             end
                         end
@@ -5332,7 +5407,7 @@ players_thread = util.create_thread(function (thr)
                                 break
                         end
                         if anti_aim_notify then
-                            util.toast(PLAYER.GET_PLAYER_NAME(pid) .. translations.is_aiming_at_you)
+                            notify(PLAYER.GET_PLAYER_NAME(pid) .. translations.is_aiming_at_you)
                         end
                     end
                 end
@@ -5433,7 +5508,7 @@ players_thread = util.create_thread(function (thr)
                 if show_voicechatters then
                     ls_log("show voicechatters")
                     if NETWORK.NETWORK_IS_PLAYER_TALKING(pid) then
-                        util.toast(PLAYER.GET_PLAYER_NAME(pid) .. " is talking")
+                        util.draw_debug_text(PLAYER.GET_PLAYER_NAME(pid) .. " is talking")
                     end
                 end
             end
@@ -5465,9 +5540,9 @@ lyric_select_actions = menu.list_action(lancescript_root, translations.select_lr
         local second_file = io.open(filesystem.stand_dir() .. '\\' .. 'Song.lrc', 'w')
         second_file:write(deez_lyrics)
         second_file:close()
-        util.toast(value .. translations.loaded)
+        notify(value .. translations.loaded)
     end, function()
-        util.toast("Aborted.")
+        notify("Aborted.")
     end)
 end)
 
@@ -5503,6 +5578,23 @@ menu.action(god_graphics_root, translations.apply_god_graphics, {}, "", function
     menu.trigger_commands("lodscale " .. god_graphics_level)
 end)
 
+menu.action(lancescript_root, translations.test_notification, {}, "", function(click_type)
+    notify(translations.test_notification)
+end)
+
+menu.toggle(lancescript_root, translations.disable_notification_system, {}, translations.disable_notification_system_desc, function(on)
+    if on then 
+        notify_mode = 1 
+    else
+        notify_mode = 2 
+    end
+end)
+
+menu.toggle(lancescript_root, translations.notification_system_sounds, {}, "", function(on)
+    notify_sounds = on
+end, true)
+
+
 
 
 -- CREDITS
@@ -5530,20 +5622,46 @@ menu.action(lancescript_credits, "ZERO", {}, translations.cr_zero, function(clic
 is_loading = false
 
 -- ON CHAT HOOK
+
+local racist_dict = {"nigg", "jew"}
+local homophobic_dict = {"fag", "tranny"}
+local stupid_detections_dict = {"Freeze from", "Vehicle takeover from", "Modded Event (", "triggered a detection:", "Model sync by"}
 chat.on_message(function(packet_sender, message_sender, text, team_chat)
     text = string.lower(text)
     local name = players.get_name(message_sender)
 
-    if end_racism and (string.contains(text, "nigg") or string.contains(text, "jew")) then 
-        menu.trigger_commands("kick " .. name)
-        util.toast(name .. translations.racism_alert)
-    end
+    if not team_chat then
+        if end_racism then 
+            for _,word in pairs(racist_dict) do 
+                if string.contains(text, word) then
+                    menu.trigger_commands("kick " .. name)
+                    notify(name .. translations.racism_alert)
+                end
+            end
+        end
 
-    if end_homophobia and (string.contains(text, "fag") or string.contains(text, "tranny")) then 
-        menu.trigger_commands("kick " .. name)
-        util.toast(name .. translations.homophobia_alert)
+
+        if end_homophobia then 
+            for _,word in pairs(homophobic_dict) do 
+                if string.contains(text, word) then
+                    menu.trigger_commands("kick " .. name)
+                    notify(name .. translations.homophobia_alert)
+                end
+            end
+        end
+
+
+        if bug_me_not then 
+            for _,word in pairs(stupid_detections_dict) do 
+                if string.contains(text, word) then
+                    menu.trigger_commands("kick " .. name)
+                    notify(name .. translations.bug_me_not_alert)
+                end
+            end
+        end
     end
 end)
+
 
 local last_car = 0
 -- ## MAIN TICK LOOP ## --
