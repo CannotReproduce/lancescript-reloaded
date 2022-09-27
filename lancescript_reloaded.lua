@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 8.70
+script_version = 8.71
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -146,8 +146,8 @@ end
 current_toasts = {}
 cur_active_modern_toasts = 0
 function modern_toast(text)
-    if not table.contains(current_toasts, text) then 
-        current_toasts[#current_toasts + 1] = text
+    if current_toasts[text] == nil then 
+        current_toasts[text] = text
         if notify_sounds then
             AUDIO.PLAY_SOUND(-1, "OPEN_WINDOW", "LESTER1A_SOUNDS", 0, 0, 1)
         end
@@ -178,8 +178,8 @@ function modern_toast(text)
                     y_pos -= 0.01 
                     if y_pos < 0 then
                         cur_active_modern_toasts -= 1 
-                        util.stop_thread()
                         current_toasts[text] = nil 
+                        util.stop_thread()
                     end
                 end
                 directx.draw_rect(0.5 - (scale_x / 2), y_pos, scale_x, scale_y, {r=0, g=0, b=0, a=0.7})
