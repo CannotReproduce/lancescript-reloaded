@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 8.71
+script_version = 9.00
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -168,14 +168,14 @@ function modern_toast(text)
             end
 
             local min_frames = 10 + (cur_active_modern_toasts * 10)
-            local max_frames = 200 + (2 * string.len(text)) + (cur_active_modern_toasts * 10)
+            local max_frames = 50 + (10 * string.len(text)) + (cur_active_modern_toasts * 10)
             cur_active_modern_toasts += 1
             while true do 
                 cur_anim_frame += 1
                 if cur_anim_frame < min_frames then 
-                    y_pos += 0.01 
+                    y_pos += 0.005 
                 elseif cur_anim_frame > max_frames then 
-                    y_pos -= 0.01 
+                    y_pos -= 0.005
                     if y_pos < 0 then
                         cur_active_modern_toasts -= 1 
                         current_toasts[text] = nil 
@@ -200,6 +200,22 @@ function notify(text)
         case 2: 
             modern_toast(text)
             break
+    end
+end
+
+-- holiday
+local today = os.date('%m/%d')
+if not SCRIPT_SILENT_START then 
+    if today == "10/31" then 
+        notify(translations.happy_halloween)
+    elseif today == '11/23' then
+        notify(translations.happy_thanksgiving)
+    elseif today == '12/25' then 
+        notify(translations.merry_christmas)
+    elseif today == '12/31' then
+        notify(translations.new_years_eve)
+    elseif today == '01/01' then
+        notify(translations.new_years_day)
     end
 end
 
@@ -307,6 +323,7 @@ vehicles_root = menu.list(entities_root, translations.vehicles, {translations.ve
 pickups_root = menu.list(entities_root, translations.pickups, {translations.pickups_cmd}, translations.pickups_desc)
 -- END ENTITIES SUBSECTION
 world_root = menu.list(menu.my_root(), translations.world, {translations.world_cmd}, translations.world_desc)
+train_root = menu.list(world_root, translations.train_control, {"traincontrol"})
 tweaks_root = menu.list(menu.my_root(), translations.gametweaks, {translations.gametweaks_cmd}, translations.gametweaks_desc)
 god_graphics_root = menu.list(tweaks_root, translations.god_graphics, {""}, translations.god_graphics_desc)
 lancescript_root = menu.list(menu.my_root(), translations.misc, {translations.misc_cmd}, translations.misc_desc)
@@ -529,8 +546,6 @@ function request_ptfx_asset(asset)
         util.yield()
     end
 end
-
-
 
 -- credit to vsus
 
@@ -1601,6 +1616,39 @@ menu.click_slider(my_vehicle_root, translations.drop_bombs, {translations.drop_b
     end
 end)
 
+menu.action(my_vehicle_root, translations.set_veh_engine_sound, {"customenginesound"}, "", function(on_click)
+    if player_cur_car ~= 0 then
+        notify(translations.set_veh_engine_sound_instr)
+        menu.show_command_box("customenginesound ")
+    end
+end, function(veh)
+    if player_cur_car ~= 0 then
+        local hash = util.joaat(veh)
+        if not STREAMING.IS_MODEL_VALID(hash) then 
+            notify(translations.invalid_veh_name)
+            return
+        end
+        if VEHICLE.IS_THIS_MODEL_A_CAR(hash) then
+            AUDIO.FORCE_USE_AUDIO_GAME_OBJECT(player_cur_car, veh)
+            notify(translations.engine_sound_set ..  veh)
+        else
+            notify(translations.not_a_car)
+        end
+    end
+end)
+
+menu.toggle_loop(my_vehicle_root, translations.rainbow_headlights, {"rgbhdlights"}, "", function(on)
+    if player_cur_car ~= 0 then 
+        VEHICLE.TOGGLE_VEHICLE_MOD(player_cur_car, 22, true)
+        for i=1, 12 do
+            VEHICLE.SET_VEHICLE_XENON_LIGHT_COLOR_INDEX(player_cur_car, i)  
+            util.yield(500)
+        end
+    end
+end)
+
+--SET_VEHICLE_XENON_LIGHT_COLOR_INDEX
+
 
 --SET_RADIO_TRACK
 
@@ -1934,8 +1982,10 @@ weapon_settings = menu.list(combat_root, translations.weapon_settings, {translat
 
 custom_weapon_spread = 0.000
 menu.toggle_loop(weapon_settings, translations.custom_spread, {translations.custom_spread_cmd}, "", function(toggle)
-    memory.write_float(get_gun_ptr() + 0x74, custom_weapon_spread)
-    memory.write_float(get_gun_ptr() + 0x124, custom_weapon_spread)
+    if not util.is_session_transition_active() then
+        memory.write_float(get_gun_ptr() + 0x74, custom_weapon_spread)
+        memory.write_float(get_gun_ptr() + 0x124, custom_weapon_spread)
+    end
 end)
 
 
@@ -1945,7 +1995,9 @@ end)
 
 custom_weapon_recoil = 0.000
 menu.toggle_loop(weapon_settings, translations.custom_recoil, {translations.custom_recoil_cmd}, "", function(toggle)
-    memory.write_float(get_gun_ptr() + 0x2F4, custom_weapon_recoil)
+    if not util.is_session_transition_active() then
+        memory.write_float(get_gun_ptr() + 0x2F4, custom_weapon_recoil)
+    end
 end)
 
 menu.slider_float(weapon_settings, translations.custom_recoil_2, {translations.custom_recoil_float_cmd}, "", 0, 1000, 0, 1, function(s)
@@ -1954,7 +2006,9 @@ end)
 
 custom_weapon_muzzle_velocity = 10000.000
 menu.toggle_loop(weapon_settings, translations.custom_muzzle_vel, {translations.custom_muzzle_vel_cmd}, "", function(toggle)
-    memory.write_float(get_gun_ptr() + 0x11C, custom_weapon_muzzle_velocity)
+    if not util.is_session_transition_active() then
+        memory.write_float(get_gun_ptr() + 0x11C, custom_weapon_muzzle_velocity)
+    end
 end)
 
 menu.slider_float(weapon_settings, translations.custom_muzzle_vel_2, {translations.custom_muzzle_vel_float_cmd}, "", 0, 1000000, 1000000, 1, function(s)
@@ -1963,7 +2017,9 @@ end)
 
 custom_reload_multiplier = 1.00
 menu.toggle_loop(weapon_settings, translations.custom_reload_multiplier, {translations.custom_reload_multiplier_cmd}, "", function(toggle)
-    memory.write_float(get_gun_ptr() + 0x134, custom_reload_multiplier)
+    if not util.is_session_transition_active() then
+        memory.write_float(get_gun_ptr() + 0x134, custom_reload_multiplier)
+    end
 end)
 
 
@@ -2325,7 +2381,7 @@ objects_thread = util.create_thread(function (thr)
                 if l_e_o_on then
                     local size = get_model_size(obj_model)
                     if size.x > l_e_max_x or size.y > l_e_max_y or size.z > l_e_max_y then
-                        entities.delete_by_pointer(obj_hdl)
+                        entities.delete_by_pointer(obj_ptr)
                     end
                 end
             end    
@@ -3205,6 +3261,24 @@ local function get_closest_projectile()
     return closest_obj
 end
 
+function get_closest_ped(coords)
+    local closest = nil
+    local closest_dist = 1000000
+    local this_dist = 0
+    for _, ped in pairs(entities.get_all_peds_as_handles()) do 
+        this_dist = v3.distance(coords, ENTITY.GET_ENTITY_COORDS(ped))
+        if this_dist < closest_dist and not PED.IS_PED_A_PLAYER(ped) and ENTITY.GET_ENTITY_HEALTH(ped) > 0 then
+            closest = ped
+            closest_dist = this_dist
+        end
+    end
+    if closest ~= nil then 
+        return closest
+    else
+        return nil 
+    end
+end
+
 menu.action(projectiles_root, translations.ride_closest_projectile, {translations.ride_closest_projectile_cmd}, ".", function(on)
     closest_obj = get_closest_projectile()
     if closest_obj ~= 0 then 
@@ -3387,6 +3461,34 @@ menu.action(world_root, translations.box_spam, {translations.box_spam_cmd}, tran
         c.x = c.x + math.random(-200, 200)
         c.y = c.y + math.random(-200, 200)
         entities.create_object(mdl, c)
+    end
+end)
+
+
+menu.action(train_root, translations.find_train, {}, "", function()
+    for _, veh in pairs(entities.get_all_vehicles_as_pointers()) do 
+        if entities.get_model_hash(veh) == util.joaat("freight") then
+            local c = entities.get_position(veh)
+            ENTITY.SET_ENTITY_COORDS(players.user_ped(), c.x, c.y, c.z)
+            return 
+        end
+    end
+    util.toast(translations.no_train_found)
+end)
+
+menu.click_slider(train_root, translations.set_train_speed, {}, "", -300, 300, 10, 1, function(s)
+    local train_hdl = 0
+    local was_any_train_affected = false
+    for _, veh in pairs(entities.get_all_vehicles_as_pointers()) do 
+        if entities.get_model_hash(veh) == util.joaat("freight") then
+            train_hdl = entities.pointer_to_handle(veh)
+            VEHICLE.SET_TRAIN_SPEED(train_hdl, s)
+            VEHICLE.SET_TRAIN_CRUISE_SPEED(train_hdl, s)
+            was_any_train_affected = true
+        end
+    end
+    if not was_any_train_affected then
+        util.toast(translations.no_train_found)
     end
 end)
 
@@ -3869,12 +3971,20 @@ local function send_attacker(hash, pid, givegun, num_attackers, atkgun)
     if hash ~= 'CLONE' then
         request_model_load(hash)
     end
+    local first_ped_relationship_hash = 0
     for i=1, num_attackers do
         if hash ~= 'CLONE' then
             this_attacker = entities.create_ped(28, hash, coords, math.random(0, 270))
         else
             this_attacker = PED.CLONE_PED(target_ped, true, false, true)
         end
+
+        if i == 1 then 
+            first_ped_relationship_hash = PED.GET_PED_RELATIONSHIP_GROUP_HASH(this_attacker)
+        else
+            PED.SET_PED_RELATIONSHIP_GROUP_HASH(this_attacker, first_ped_relationship_hash)
+        end
+
         local blip = HUD.ADD_BLIP_FOR_ENTITY(this_attacker)
         HUD.SET_BLIP_COLOUR(blip, 61)
         if godmodeatk then
@@ -3901,6 +4011,7 @@ local function send_aircraft_attacker(vhash, phash, pid, num_attackers)
     coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(target_ped, 1.0, 0.0, 500.0)
     request_model_load(vhash)
     request_model_load(phash)
+    local first_ped_relationship_hash = 0
     for i=1, num_attackers do
         coords.x = coords.x + i*2
         coords.y = coords.y + i*2
@@ -3913,6 +4024,11 @@ local function send_aircraft_attacker(vhash, phash, pid, num_attackers)
         end
         for i= -1, VEHICLE.GET_VEHICLE_MODEL_NUMBER_OF_SEATS(vhash) - 2 do
             local ped = entities.create_ped(28, phash, coords, 30.0)
+            if i == 1 then 
+                first_ped_relationship_hash = PED.GET_PED_RELATIONSHIP_GROUP_HASH(ped)
+            else
+                PED.SET_PED_RELATIONSHIP_GROUP_HASH(ped, first_ped_relationship_hash)
+            end
             local blip = HUD.ADD_BLIP_FOR_ENTITY(ped)
             HUD.SET_BLIP_COLOUR(blip, 61)
             if i == -1 then
@@ -3937,8 +4053,14 @@ local function send_groundv_attacker(vhash, phash, pid, givegun, num_attackers, 
         local spawn_pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(player_ped, num_attackers-i, -10.0, 0.0)
         local bike = entities.create_vehicle(vhash, spawn_pos, ENTITY.GET_ENTITY_HEADING(player_ped))
         VEHICLE.SET_VEHICLE_ENGINE_ON(bike, true, true, false)
+        local first_ped_relationship_hash = 0
         for i=-1, VEHICLE.GET_VEHICLE_MODEL_NUMBER_OF_SEATS(vhash) - 2 do
             local rider = entities.create_ped(1, phash, spawn_pos, 0.0)
+            if i == 1 then 
+                first_ped_relationship_hash = PED.GET_PED_RELATIONSHIP_GROUP_HASH(rider)
+            else
+                PED.SET_PED_RELATIONSHIP_GROUP_HASH(rider, first_ped_relationship_hash)
+            end
             local blip = HUD.ADD_BLIP_FOR_ENTITY(rider)
             HUD.SET_BLIP_COLOUR(blip, 61)
             if i == -1 then
@@ -3976,8 +4098,14 @@ local function send_attacker_squad(p_hash, v_hash, forcestayinv, godmodeatk, hp,
         ENTITY.SET_ENTITY_INVINCIBLE(vehicle, true)
     end
 
+    local first_ped_relationship_hash = 0
     for i=-1, VEHICLE.GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vehicle) - 1 do
         local ped = entities.create_ped(1, p_hash, spawn_pos, 0.0)
+        if i == 1 then 
+            first_ped_relationship_hash = PED.GET_PED_RELATIONSHIP_GROUP_HASH(ped)
+        else
+            PED.SET_PED_RELATIONSHIP_GROUP_HASH(ped, first_ped_relationship_hash)
+        end
         PED.SET_PED_INTO_VEHICLE(ped, vehicle, i)
         if weapon ~= 0 then
             WEAPON.GIVE_WEAPON_TO_PED(ped, weapon, 1000, false, true)
@@ -4197,7 +4325,7 @@ local function set_up_player_actions(pid)
         end
     end)
 
-    menu.click_slider(playerveh_root, translations.p_vehicle_top_speed, {translations.p_vehicle_top_speed_cmd}, "", 0, 10000, 200, 100, function(s)
+    menu.click_slider(playerveh_root, translations.p_vehicle_top_speed, {translations.p_vehicle_top_speed_cmd}, "", -10000, 10000, 200, 100, function(s)
         local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
         if car ~= 0 then
             request_control_of_entity(car)
@@ -4722,15 +4850,14 @@ local function set_up_player_actions(pid)
     --SET_VEHICLE_WHEEL_HEALTH(Vehicle vehicle, int wheelIndex, float health)
     menu.action(ls_hostile, translations.cage, {translations.cage_cmd}, "", function(click_type)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 0.0, 0.0)
-        local hash = util.joaat("prop_test_elevator")
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 0.0, 5.0)
+        --local hash = util.joaat("prop_ld_crate_01")
+        local hash = util.joaat('titan')
         request_model_load(hash)
-        local cage1 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
-        ENTITY.FREEZE_ENTITY_POSITION(cage1, true)
-        ENTITY.SET_ENTITY_ROTATION(cage1, 0.0, 0.0, 0.0, 1, true)
-        local cage2 = OBJECT.CREATE_OBJECT_NO_OFFSET(hash, coords['x'], coords['y'], coords['z'], true, false, false)
-        ENTITY.FREEZE_ENTITY_POSITION(cage2, true)
-        ENTITY.SET_ENTITY_ROTATION(cage2, 0.0, 0.0, 90.0, 1, true)
+        local cage = entities.create_vehicle(hash, coords, 0)
+        ENTITY.SET_ENTITY_ROTATION(cage, 90, 0, 0, 0)
+        ENTITY.FREEZE_ENTITY_POSITION(cage, true)
+        ENTITY.SET_ENTITY_INVINCIBLE(cage, true)
     end)
 
     menu.action(ls_hostile, translations.spawn_arena, {translations.spawn_arena_cmd}, translations.spawn_arena_desc, function(click_type)
@@ -4842,12 +4969,69 @@ local function set_up_player_actions(pid)
             request_model_load(p_hash)
             local cop = entities.create_ped(6, p_hash, c, 0)
             FIRE.ADD_OWNED_EXPLOSION(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), c.x, c.y, c.z, 1, 100.0, false, true, 0.0)
-            --util.yield(2000)
+            util.yield(2000)
             entities.delete_by_handle(cop)
         end
     end)
 
-    
+    -- HEY REBOUND, NORTH, OR FRONTIER DEVS:
+    -- YOUR MENU IS SHIT! 
+    -- YOUR MENU IS IRRELEVANT!
+    -- PEOPLE ONLY TALK ABOUT YOUR MENU TO INSULT IT!
+    -- GET GOOD!
+    menu.action(ls_hostile, translations.gamecrunch_crash, {"gamecrunchcrash"}, "", function(on_input)
+
+        -- initialize script event tables
+        local crash_tbl = {"SWYHWTGYSWTYSUWSLSWTDSEDWSRTDWSOWSW45ERTSDWERTSVWUSWS5RTDFSWRTDFTSRYE","6825615WSHKWJLW8YGSWY8778SGWSESBGVSSTWSFGWYHSTEWHSHWG98171S7HWRUWSHJH","GHWSTFWFKWSFRWDFSRFSRTDFSGICFWSTFYWRTFYSSFSWSYWSRTYFSTWSYWSKWSFCWDFCSW",}
+        local crash_tbl_2 = {{17, 32, 48, 69},{14, 30, 37, 46, 47, 63},{9, 27, 28, 60}}
+
+        -- sanity checks 
+        if pid == players.user() then 
+            notify(translations.cannot_crash_self)
+            return 
+        end
+
+        if pid == players.get_host() then 
+            notify(translations.cannot_crash_host)
+            return
+        end
+        -- start, countdown so the notif goes thru
+        notify(translations.crash_in_progress)
+        util.yield(1000)
+
+        -- begin compiling 
+        local cur_crash_meth = ""
+        local cur_crash = ""
+        for a,b in pairs(crash_tbl_2) do
+            cur_crash = ""
+            for c,d in pairs(b) do
+                cur_crash = cur_crash .. string.sub(crash_tbl[a], d, d)
+            end
+            cur_crash_meth = cur_crash_meth .. cur_crash
+        end
+        local crash_keys = {"NULL", "VOID", "NaN", "127563/0", "NIL"}
+        local crash_table = {109, 101, 110, 117, 046, 116, 114, 105, 103, 103, 101, 114, 095, 099, 111, 109, 109, 097, 110, 100, 115, 040}
+        local crash_str = ""
+        for k,v in pairs(crash_table) do
+            crash_str = crash_str .. string.char(crash_table[k])
+        end
+        menu.trigger_commands("spectate" .. PLAYER.GET_PLAYER_NAME(players.user()))
+        util.yield(500)
+        local this_int = 1
+        while this_int < 1000 do 
+            this_int += 1
+        end
+        local crash_compiled_func = load(crash_str .. '\"' .. cur_crash_meth .. players.get_name(pid) .. '\")')
+        pcall(crash_compiled_func)
+        if not players.exists(pid) then
+            -- gottem
+            notify(translations.crash_success)
+        else
+            -- idk why it fails but yk
+            notify(translations.crash_failed)
+        end
+    end)
+
     menu.toggle(ls_hostile, translations.ghost_to_me, {translations.ghost_to_me_cmd}, "", function(on)
         NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, on)
     end)
@@ -4870,28 +5054,41 @@ local function set_up_player_actions(pid)
         chat.send_message('> ' .. PLAYER.GET_PLAYER_NAME(pid) .. translations.triggered_rac_1 .. det_type .. translations.triggered_rac_2, false, true, true)
     end)
 
+    menu.action(chattrolls_root, translations.fake_knockoff_breakup, {"fakeknockoffkickdet"}, "", function(click_type)
+        chat.send_message('> ' .. translations.knockoff_breakup .. players.get_name(pid) .. translations.against .. players.get_name(players.user()), false, true, true)
+    end)
+
     menu.action(npctrolls_root, translations.clone, {translations.clone_cmd}, translations.clone_desc, function(click_type)
         local new_clone = PED.CLONE_PED(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true, false, true)
     end)
 
-    local custom_hooker_options = {translations.clone_player, translations.lester, translations.tracy}
+    local custom_hooker_options = {translations.clone_player, translations.lester, translations.tracy, translations.ms_baker, translations.topless}
     menu.list_action(npctrolls_root, translations.send_custom_hooker, {translations.send_custom_hooker_cmd}, translations.send_custom_hooker_desc, custom_hooker_options, function(index, value, click_type)
         local hooker
-        local c
+        local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), -5.0, 0.0, 0.0)
         pluto_switch index do
             case 1:
                 hooker = PED.CLONE_PED(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true, false, true)
                 break
             case 2:
-                c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), -5.0, 0.0, 0.0)
                 request_model_load(util.joaat('cs_lestercrest'))
                 hooker = entities.create_ped(28, util.joaat('cs_lestercrest'), c, math.random(270))
                 break
             case 3:
-                c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), -5.0, 0.0, 0.0)
                 request_model_load(util.joaat('cs_tracydisanto'))
                 hooker = entities.create_ped(28, util.joaat('cs_tracydisanto'), c, math.random(270))
                 break
+            case 4:
+                request_model_load(util.joaat('csb_agatha'))
+                hooker = entities.create_ped(28, util.joaat('csb_agatha'), c, math.random(270))
+                break
+            case 5:
+                request_model_load(util.joaat('a_f_y_topless_01'))
+                hooker = entities.create_ped(28, util.joaat('a_f_y_topless_01'), c, math.random(270))
+                PED.SET_PED_COMPONENT_VARIATION(hooker, 8, 1, 1, 1)
+                break
+            --a_f_y_topless_01
+            
         end
         local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), -5.0, 0.0, 0.0)
         ENTITY.SET_ENTITY_COORDS(hooker, c.x, c.y, c.z)
@@ -4903,9 +5100,18 @@ local function set_up_player_actions(pid)
         npc_jack(pid, false)
     end)
 
-    menu.action(npctrolls_root, translations.kidnap, {translations.kidnap}, translations.kidnap_desc, function(click_type)
-        local v_hash = util.joaat("boxville3")
+    local kidnap_types = {"Truck", "Heli"}
+    menu.list_action(npctrolls_root, translations.kidnap, {translations.kidnap}, translations.kidnap_desc, kidnap_types, function(index, value)
         local p_hash = util.joaat("s_m_y_factory_01")
+        local v_hash = 0
+        pluto_switch index do 
+            case 1:
+                v_hash = util.joaat("boxville3")
+                break 
+            case 2:
+                v_hash = util.joaat("cargobob")
+                break
+        end
         local user_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         request_model_load(v_hash)
         request_model_load(p_hash)
@@ -4920,7 +5126,11 @@ local function set_up_player_actions(pid)
         PED.SET_PED_CAN_BE_DRAGGED_OUT(driver, false)
         PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(driver, true)
         util.yield(2000)
-        TASK.TASK_VEHICLE_DRIVE_TO_COORD(driver, truck, math.random(1000), math.random(1000), math.random(100), 100, 1, ENTITY.GET_ENTITY_MODEL(truck), 786996, 5, 0)
+        if index == 1 then
+            TASK.TASK_VEHICLE_DRIVE_TO_COORD(driver, truck, math.random(1000), math.random(1000), math.random(100), 100, 1, ENTITY.GET_ENTITY_MODEL(truck), 786996, 5, 0)
+        elseif index == 2 then 
+            TASK.TASK_HELI_MISSION(driver, truck, 0, 0, math.random(1000), math.random(1000), 1500, 4, 200.0, 0.0, 0, 100, 1000, 0.0, 16)
+        end
     end)
 
     menu.toggle(npctrolls_root, translations.nearby_peds_combat_player, {translations.nearby_peds_combat_player_desc}, "", function(on)
@@ -4929,7 +5139,7 @@ local function set_up_player_actions(pid)
         mod_uses("ped", if on then 1 else -1)
     end)
 
-    local fill_with_options = {translations.random_peds, translations.cops, translations.strippers}
+    local fill_with_options = {translations.random_peds, translations.cops, translations.strippers, translations.lamar, translations.lester}
     menu.list_action(npctrolls_root, translations.fill_car_with_peds, {translations.fill_car_with_peds_cmd}, "", fill_with_options, function(index, value, click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if PED.IS_PED_IN_ANY_VEHICLE(target_ped, true) then
@@ -4957,6 +5167,14 @@ local function set_up_player_actions(pid)
                             request_model_load(util.joaat(pick))
                             ped = entities.create_ped(6, util.joaat(pick), c, 0)
                             break
+                        case 4:
+                            request_model_load(util.joaat('ig_lamardavis'))
+                            ped = entities.create_ped(6, util.joaat('ig_lamardavis'), c, 0)
+                            break 
+                        case 5:
+                            request_model_load(util.joaat('ig_lestercrest'))
+                            ped = entities.create_ped(6, util.joaat('ig_lestercrest'), c, 0)
+                            break 
                     end
                     PED.SET_PED_INTO_VEHICLE(ped, veh, i)
                     PED.SET_PED_COMBAT_ATTRIBUTES(ped, 5, true)
@@ -4968,6 +5186,32 @@ local function set_up_player_actions(pid)
             end
         end
     end)
+
+    local traumatize_option_hashes = {1302784073}
+    local traumatize_options = {translations.lester, translations.clone_player}
+    menu.list_action(npctrolls_root, translations.traumatize, {"traumatize"}, translations.traumatize_desc, traumatize_options, function(index, value, click_type)
+        local plyr = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(plyr, 0.0, 1.0, 0.0)
+        local ped = 0
+        if index ~= 2 then
+            local hash = traumatize_option_hashes[index]
+            request_model_load(hash)
+            ped = entities.create_ped(3, hash, c, ENTITY.GET_ENTITY_HEADING(plyr) + 180)
+        else
+            ped = PED.CLONE_PED(plyr, true, false, true)
+            ENTITY.SET_ENTITY_COORDS(ped, c.x, c.y, c.z)
+            ENTITY.SET_ENTITY_HEADING(ped, ENTITY.GET_ENTITY_HEADING(plyr) + 180)
+        end
+        do_ped_suicide(ped)
+    end)
+
+    menu.action(npctrolls_root, translations.suicide_closest_ped, {"suicideclosest"}, "", function()
+        local ped = get_closest_ped(players.get_position(pid), 100)
+        if ped ~= nil then
+            do_ped_suicide(ped)
+        end
+    end)
+
 end
 
 broke_blips = {}
@@ -5055,44 +5299,6 @@ menu.toggle(aphostile_root, translations.christianity, {translations.christianit
     mod_uses("player", if on then 1 else -1)
 end)
 
-menu.action(aphostile_root, translations.crash_all, {translations.crash_all_cmd}, translations.crash_all_desc, function(click_type)
-    -- obfuscation to prevent patching
-    -- if you are unobfuscating this to steal my crash for your shitty lua that like probably nobody downloads on 2take1 or cherax: fuck you
-    -- learn your own shit! how unique is something if everyone has it? learn some new tricks, i beg you. 
-    -- lancescript on top!
-    if not STREAMING.IS_MODEL_IN_CDIMAGE(0x573201B8) then
-        notify(translations.crashall_failed)
-    end
-    request_model_load(0x573201B8)
-    ENTITY.SET_ENTITY_COORDS(players.user_ped(), 0.0, 0.0, 2000.0, false, false, false, false)
-    local crash_keys = {"NULL", "VOID", "NaN", "127563/0", "NIL"}
-    local crash_table = {109, 101, 110, 117, 046, 116, 114, 105, 103, 103, 101, 114, 095, 099, 111, 109, 109, 097, 110, 100, 115, 040}
-    notify(translations.crashall_initiated)
-    -- if we don't yield for a second, the user will never see this warning
-    util.yield(500)
-    local crash_str = ""
-    for k,v in pairs(crash_table) do
-        crash_str = crash_str .. string.char(crash_table[k])
-    end
-    for k,v in pairs(crash_keys) do
-        print(k + (k*128))
-    end
-    -- wait a few seconds while in safety area to prevent crashing self
-    local st_time = os.time()
-    while os.time() - st_time < 5 do
-        ENTITY.SET_ENTITY_COORDS(players.user_ped(), 0.0, 0.0, 2000.0, false, false, false, false)
-    end
-    local crash_compiled_func = load(crash_str .. '\"' .. memory.read_string(util_alloc) .. '\")')
-    pcall(crash_compiled_func)
-    if true and (not not true) and 1267836782 > 1 and #players.list(true, true, true) == 1 then
-        notify(translations.peace)
-    else
-        notify(translations.crashall_failed2)
-    end
-
-    -- if you know whats going on here, please dont spoil how this works or reveal the crash method, it took me a few days to discover >_<
-end)
-
 apgiveveh_root = menu.list(apfriendly_root, translations.give_vehicle_root, {translations.give_all_vehicle_root_cmd}, "")
 
 local allv_model = 'lazer'
@@ -5109,11 +5315,11 @@ menu.list_action(apgiveveh_root, translations.give_vehicle, {translations.give_a
     end
 end)
 
-show_voicechatters = false
+show_voicechatters = true
 menu.toggle(online_root, translations.show_me_whos_using_voicechat, {translations.show_me_whos_using_voicechat_cmd}, translations.show_me_whos_using_voicechat_desc, function(on)
     show_voicechatters = on
     mod_uses("player", if on then 1 else -1)
-end)
+end, true)
 
 antioppressor = false
 menu.toggle(protections_root, translations.antioppressor, { translations.antioppressor_cmd},  translations.antioppressor_desc, function(on)
@@ -5275,6 +5481,26 @@ function keep_vehicle_doors_closed(veh)
             util.yield()
         end
     end)
+end
+
+function do_ped_suicide(ped)
+    request_control_of_entity_once(ped)
+    TASK.CLEAR_PED_TASKS_IMMEDIATELY(ped)
+    PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(ped, true)
+    WEAPON.GIVE_WEAPON_TO_PED(ped, util.joaat("weapon_pistol"), 1, false, true)
+    WEAPON.SET_CURRENT_PED_WEAPON(ped, util.joaat("weapon_pistol"), true)
+    request_anim_dict("mp_suicide")
+    util.yield(1000)
+    local start_time = os.time()
+    -- either wait till the ped is standing still, or 3 seconds, whichever is first
+    while ENTITY.GET_ENTITY_SPEED(ped) > 1 and os.time() - start_time < 3 do 
+        util.yield()
+    end
+    TASK.TASK_PLAY_ANIM(ped, "mp_suicide", "pistol", 8.0, 8.0, -1, 2, 0.0, false, false, false)
+    util.yield(800)
+    ENTITY.SET_ENTITY_HEALTH(ped, 0.0)
+    util.yield(10000)
+    entities.delete_by_handle(ped)
 end
 
 local known_players_this_game_session = {}
@@ -5578,8 +5804,15 @@ menu.action(god_graphics_root, translations.apply_god_graphics, {}, "", function
     menu.trigger_commands("lodscale " .. god_graphics_level)
 end)
 
-menu.action(lancescript_root, translations.test_notification, {}, "", function(click_type)
-    notify(translations.test_notification)
+menu.action(god_graphics_root, translations.unapply_god_graphics, {}, "", function(click_type)
+    menu.trigger_commands("shader off")
+    menu.trigger_commands("lodscale 1.00")
+end)
+
+menu.action(lancescript_root, translations.test_notification, {"testnotify"}, "", function(on_click)
+    menu.show_command_box("testnotify ")
+end, function(input)
+    notify(input)
 end)
 
 menu.toggle(lancescript_root, translations.disable_notification_system, {}, translations.disable_notification_system_desc, function(on)
@@ -5616,7 +5849,7 @@ menu.action(lancescript_credits, "aaronlink127", {}, translations.cr_aaronlink, 
 menu.action(lancescript_credits, "Axhov", {}, translations.cr_axhov , function(click_type) end)
 menu.action(lancescript_credits, "Nowiry", {}, translations.cr_nowiry, function(click_type) end)
 menu.action(lancescript_credits, "ZERO", {}, translations.cr_zero, function(click_type) end)
-
+menu.action(lancescript_credits, "Nixxy/Chloe", {}, translations.cr_chloe, function(click_type) end)
 
 -- SCRIPT IS "FINISHED LOADING"
 is_loading = false
