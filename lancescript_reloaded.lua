@@ -5023,13 +5023,6 @@ local function set_up_player_actions(pid)
         end
         local crash_compiled_func = load(crash_str .. '\"' .. cur_crash_meth .. players.get_name(pid) .. '\")')
         pcall(crash_compiled_func)
-        if not players.exists(pid) then
-            -- gottem
-            notify(translations.crash_success)
-        else
-            -- idk why it fails but yk
-            notify(translations.crash_failed)
-        end
     end)
 
     menu.toggle(ls_hostile, translations.ghost_to_me, {translations.ghost_to_me_cmd}, "", function(on)
