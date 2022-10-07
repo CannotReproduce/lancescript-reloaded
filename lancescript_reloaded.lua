@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 9.00
+script_version = 9.10
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -382,6 +382,17 @@ end
 -- UTILTITY FUNCTIONS
 
 local alphabet = "abcdefghijklmnopqrstuvwxyzABCEDFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+function is_user_a_stand_user(pid)
+    if not players.is_marked_as_modder(pid) then
+        return false
+    end
+    local ref = menu.ref_by_rel_path(menu.player_root(pid), "Classification: Modder>Stand User")
+    if not menu.is_ref_valid(ref) then 
+        return false
+    end
+    return true
+end
 
 function random_string(length)
     local res = {}
@@ -5252,6 +5263,17 @@ menu.action(ap_root, translations.toast_best_mug_target, {translations.toast_bes
     end
 end)
 
+menu.action(ap_root, translations.stand_only_chat, {"standpm"}, translations.stand_only_chat_desc, function(on_click)
+    notify(translations.enter_pm)
+    menu.show_command_box("standpm ")
+end, function(message)
+    message = "[STAND ONLY] " .. message 
+    for _, pid in players.list(true, true, true) do
+        if is_user_a_stand_user(pid) or pid == players.user() then
+            chat.send_targeted_message(pid, players.user(), message, true)
+        end
+    end
+end)
 
 local announce_options = {translations.best_mug_target, translations.poorest_player, translations.richest_player, translations.horniest_player}
 menu.list_action(ap_root, translations.announce, {translations.announce_cmd}, "", announce_options, function(index, value, click_type)
@@ -5308,11 +5330,11 @@ menu.list_action(apgiveveh_root, translations.give_vehicle, {translations.give_a
     end
 end)
 
-show_voicechatters = true
+show_voicechatters = false
 menu.toggle(online_root, translations.show_me_whos_using_voicechat, {translations.show_me_whos_using_voicechat_cmd}, translations.show_me_whos_using_voicechat_desc, function(on)
     show_voicechatters = on
     mod_uses("player", if on then 1 else -1)
-end, true)
+end, false)
 
 antioppressor = false
 menu.toggle(protections_root, translations.antioppressor, { translations.antioppressor_cmd},  translations.antioppressor_desc, function(on)
