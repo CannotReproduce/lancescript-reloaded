@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 9.10
+script_version = 9.11
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -720,9 +720,15 @@ menu.toggle(detections_root, translations.lance_detection, {translations.lance_d
     detection_lance = on
 end, true)
 
-admin_bail = true
-menu.toggle(protections_root, translations.admin_bail, {translations.admin_bail_cmd}, translations.admin_bail_desc, function(on)
-    admin_bail = on
+menu.toggle_loop(protections_root, translations.admin_bail, {translations.admin_bail_cmd}, translations.admin_bail_desc, function(on)
+    if util.is_session_started() then
+        for _, pid in players.list(false, true, true) do 
+            if players.is_marked_as_admin(pid) then 
+                notify(translations.admin_detected)
+                menu.trigger_commands("quickbail")
+            end    
+        end
+    end
 end, true)
 
 local function get_random_joke()
@@ -5520,14 +5526,6 @@ end
 
 local known_players_this_game_session = {}
 players.on_join(function(pid)
-
-    if players.is_marked_as_admin(pid) then 
-        if admin_bail then 
-            notify(translations.admin_detected)
-            menu.trigger_commands("quickbail")
-        end
-    end
-
     set_up_player_actions(pid)
 
     if pid ~= players.user() then
