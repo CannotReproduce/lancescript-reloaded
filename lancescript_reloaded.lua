@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 9.11
+script_version = 9.21
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -1222,6 +1222,155 @@ end)
 menu.slider(self_root, translations.tp_forward_units, {translations.tp_forward_units_cmd}, translations.tp_forward_units_desc, 5, 100, 1, 1, function(s)
     tpf_units = s
 end)
+
+self_root:toggle_loop(translations.laser_eyes, {"lasereyes"}, translations.laser_eyes_desc, function(on)
+    local weaponHash = util.joaat("weapon_heavysniper_mk2")
+    local dictionary = "weap_xs_weapons"
+    local ptfx_name = "bullet_tracer_xs_sr"
+    local camRot = CAM.GET_FINAL_RENDERED_CAM_ROT(2)
+    if PAD.IS_CONTROL_PRESSED(51, 51) then
+        -- credits to jinxscript
+        local inst = v3.new()
+        v3.set(inst,CAM.GET_FINAL_RENDERED_CAM_ROT(2))
+        local tmp = v3.toDir(inst)
+        v3.set(inst, v3.get(tmp))
+        v3.mul(inst, 1000)
+        v3.set(tmp, CAM.GET_FINAL_RENDERED_CAM_COORD())
+        v3.add(inst, tmp)
+        camAim_x, camAim_y, camAim_z = v3.get(inst)
+        local ped_model = ENTITY.GET_ENTITY_MODEL(players.user_ped())
+        local left_eye_id = 0
+        local right_eye_id = 0
+        pluto_switch ped_model do 
+            case 1885233650:
+            case -1667301416:
+                left_eye_id = 25260
+                right_eye_id = 27474
+                break
+            -- michael / story mode character
+            case 225514697:
+            -- imply they're using a story mode ped i guess. i dont know what else to do unless i have data on every single ped
+            pluto_default:
+                left_eye_id = 5956
+                right_eye_id = 6468
+        end
+        local boneCoord_L = ENTITY.GET_WORLD_POSITION_OF_ENTITY_BONE(players.user_ped(), PED.GET_PED_BONE_INDEX(players.user_ped(), left_eye_id))
+        local boneCoord_R = ENTITY.GET_WORLD_POSITION_OF_ENTITY_BONE(players.user_ped(), PED.GET_PED_BONE_INDEX(players.user_ped(), right_eye_id))
+        if ped_model == util.joaat("mp_f_freemode_01") then 
+            boneCoord_L.z += 0.08
+            boneCoord_R.z += 0.08
+        end
+        camRot.x += 90
+        request_ptfx_asset(dictionary)
+        GRAPHICS.USE_PARTICLE_FX_ASSET(dictionary)
+        GRAPHICS.START_NETWORKED_PARTICLE_FX_NON_LOOPED_AT_COORD(ptfx_name, boneCoord_L.x, boneCoord_L.y, boneCoord_L.z, camRot.x, camRot.y, camRot.z, 2, 0, 0, 0, false)
+        GRAPHICS.USE_PARTICLE_FX_ASSET(dictionary)
+        GRAPHICS.START_NETWORKED_PARTICLE_FX_NON_LOOPED_AT_COORD(ptfx_name, boneCoord_R.x, boneCoord_R.y, boneCoord_R.z, camRot.x, camRot.y, camRot.z, 2, 0, 0, 0, false)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS_IGNORE_ENTITY(boneCoord_L.x, boneCoord_L.y, boneCoord_L.z, camAim_x, camAim_y, camAim_z, 100, true, weaponHash, players.user_ped(), false, true, 100, players.user_ped(), 0)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS_IGNORE_ENTITY(boneCoord_R.x, boneCoord_R.y, boneCoord_R.z, camAim_x, camAim_y, camAim_z, 100, true, weaponHash, players.user_ped(), false, true, 100, players.user_ped(), 0)
+    end
+end)
+
+local entity_held = 0
+local are_hands_up = false
+self_root:toggle_loop(translations.throw_cars, {"throwcars"}, "", function(on)
+    if PAD.IS_CONTROL_JUST_RELEASED(38, 38) then
+        if entity_held == 0 then
+            if not are_hands_up then 
+                local closest = get_closest_veh(ENTITY.GET_ENTITY_COORDS(players.user_ped()))
+                local veh = closest[1]
+                if veh ~= nil then 
+                    local dist = closest[2]
+                    if dist <= 5 then 
+                        request_anim_dict("missminuteman_1ig_2")
+                        TASK.TASK_PLAY_ANIM(players.user_ped(), "missminuteman_1ig_2", "handsup_enter", 8.0, 0.0, -1, 50, 0, false, false, false)
+                        util.yield(500)
+                        are_hands_up = true
+                        ENTITY.SET_ENTITY_ALPHA(veh, 100)
+                        ENTITY.SET_ENTITY_HEADING(veh, ENTITY.GET_ENTITY_HEADING(players.user_ped()))
+                        ENTITY.SET_ENTITY_INVINCIBLE(veh, true)
+                        request_control_of_entity_once(veh)
+                        ENTITY.ATTACH_ENTITY_TO_ENTITY(veh, players.user_ped(), 0, 0, 0, get_model_size(ENTITY.GET_ENTITY_MODEL(veh)).z / 2, 180, 180, -180, true, false, true, false, 0, true)
+                        entity_held = veh
+                    end 
+                end
+            else
+                TASK.CLEAR_PED_TASKS_IMMEDIATELY(players.user_ped())
+                are_hands_up = false
+            end
+        else
+            if ENTITY.IS_ENTITY_A_VEHICLE(entity_held) then
+                ENTITY.DETACH_ENTITY(entity_held)
+                VEHICLE.SET_VEHICLE_FORWARD_SPEED(entity_held, 100.0)
+                VEHICLE.SET_VEHICLE_OUT_OF_CONTROL(entity_held, true, true)
+                ENTITY.SET_ENTITY_ALPHA(entity_held, 255)
+                ENTITY.SET_ENTITY_INVINCIBLE(veh, false)
+                TASK.CLEAR_PED_TASKS_IMMEDIATELY(players.user_ped())
+                ENTITY.FREEZE_ENTITY_POSITION(players.user_ped(), true)
+                ENTITY.SET_ENTITY_NO_COLLISION_ENTITY(entity_held, players.user_ped(), false)
+                request_anim_dict("melee@unarmed@streamed_core")
+                TASK.TASK_PLAY_ANIM(players.user_ped(), "melee@unarmed@streamed_core", "heavy_punch_a", 8.0, 8.0, -1, 0, 0.3, false, false, false)
+                util.yield(500)
+                ENTITY.FREEZE_ENTITY_POSITION(players.user_ped(), false)
+                entity_held = 0
+                are_hands_up = false
+            end
+            -- toss
+        end
+    end
+end)
+
+local ped_held = 0
+self_root:toggle_loop(translations.throw_peds, {"throwpeds"}, translations.throw_peds_desc, function(on)
+    if PAD.IS_CONTROL_JUST_RELEASED(38, 38) then
+        if entity_held == 0 then
+            if not are_hands_up then 
+                local closest = get_closest_ped_new(ENTITY.GET_ENTITY_COORDS(players.user_ped()))
+                if closest ~= nil then
+                    local ped = closest[1]
+                    if ped ~= nil then
+                        local dist = closest[2]
+                        if dist <= 5 then 
+                            request_anim_dict("missminuteman_1ig_2")
+                            TASK.TASK_PLAY_ANIM(players.user_ped(), "missminuteman_1ig_2", "handsup_enter", 8.0, 0.0, -1, 50, 0, false, false, false)
+                            util.yield(500)
+                            are_hands_up = true
+                            ENTITY.SET_ENTITY_ALPHA(ped, 100)
+                            ENTITY.SET_ENTITY_HEADING(ped, ENTITY.GET_ENTITY_HEADING(players.user_ped()))
+                            request_control_of_entity_once(ped)
+                            ENTITY.ATTACH_ENTITY_TO_ENTITY(ped, players.user_ped(), 0, 0, 0, 1.3, 180, 180, -180, true, false, true, true, 0, true)
+                            entity_held = ped
+                        end 
+                    end
+                end
+            else
+                TASK.CLEAR_PED_TASKS_IMMEDIATELY(players.user_ped())
+                are_hands_up = false
+            end
+        else
+            if ENTITY.IS_ENTITY_A_PED(entity_held) then
+                ENTITY.DETACH_ENTITY(entity_held)
+                ENTITY.SET_ENTITY_ALPHA(entity_held, 255)
+                PED.SET_PED_TO_RAGDOLL(entity_held, 10, 10, 0, false, false, false)
+                --ENTITY.SET_ENTITY_VELOCITY(entity_held, 0, 100, 0)
+                ENTITY.SET_ENTITY_MAX_SPEED(entity_held, 100.0)
+                ENTITY.APPLY_FORCE_TO_ENTITY(entity_held, 1, 0, 100, 0, 0, 0, 0, 0, true, false, true, false, false)
+                AUDIO.PLAY_PAIN(entity_held, 7, 0, 0)
+                TASK.CLEAR_PED_TASKS_IMMEDIATELY(players.user_ped())
+                ENTITY.FREEZE_ENTITY_POSITION(players.user_ped(), true)
+                ENTITY.SET_ENTITY_NO_COLLISION_ENTITY(entity_held, players.user_ped(), false)
+                request_anim_dict("melee@unarmed@streamed_core")
+                TASK.TASK_PLAY_ANIM(players.user_ped(), "melee@unarmed@streamed_core", "heavy_punch_a", 8.0, 8.0, -1, 0, 0.3, false, false, false)
+                util.yield(500)
+                ENTITY.FREEZE_ENTITY_POSITION(players.user_ped(), false)
+                entity_held = 0
+                are_hands_up = false
+            end
+            -- toss
+        end
+    end
+end)
+
 
 
 local function max_out_car(veh)
@@ -2888,6 +3037,63 @@ local function get_closest_vehicle(entity)
     return closestveh
 end
 
+function get_closest_veh(coords)
+    local closest = nil
+    local closest_dist = 1000000
+    local this_dist = 0
+    for _, veh in pairs(entities.get_all_vehicles_as_handles()) do 
+        this_dist = v3.distance(coords, ENTITY.GET_ENTITY_COORDS(veh))
+        if this_dist < closest_dist  and ENTITY.GET_ENTITY_HEALTH(veh) > 0 then
+            closest = veh
+            closest_dist = this_dist
+        end
+    end
+    if closest ~= nil then 
+        return {closest, closest_dist}
+    else
+        return nil 
+    end
+end
+
+function get_closest_ped_new(coords)
+    local closest = nil
+    local closest_dist = 1000000
+    local this_dist = 0
+    for _, ped in pairs(entities.get_all_peds_as_handles()) do 
+        this_dist = v3.distance(coords, ENTITY.GET_ENTITY_COORDS(ped))
+        if this_dist < closest_dist and not PED.IS_PED_A_PLAYER(ped) and not PED.IS_PED_FATALLY_INJURED(ped)  and not PED.IS_PED_IN_ANY_VEHICLE(ped, true) then
+            closest = ped
+            closest_dist = this_dist
+        end
+    end
+    if closest ~= nil then 
+        return {closest, closest_dist}
+    else
+        return nil 
+    end
+end
+
+function get_closest_ped_to_ped(coords, init_ped)
+    local coords = ENTITY.GET_ENTITY_COORDS(init_ped)
+    local closest = nil
+    local closest_dist = 1000000
+    local this_dist = 0
+    for _, ped in pairs(entities.get_all_peds_as_handles()) do 
+        this_dist = v3.distance(coords, ENTITY.GET_ENTITY_COORDS(ped))
+        if this_dist < closest_dist and not PED.IS_PED_A_PLAYER(ped) and not PED.IS_PED_FATALLY_INJURED(ped) and not PED.IS_PED_IN_ANY_VEHICLE(ped, true) and ped ~= init_ped then
+            closest = ped
+            closest_dist = this_dist
+        end
+    end
+    if closest ~= nil then 
+        return {closest, closest_dist}
+    else
+        return nil 
+    end
+end
+
+
+
 menu.action(vehicles_root, translations.teleport_into_closest_vehicle, {translations.teleport_into_closest_vehicle_cmd}, translations.teleport_into_closest_vehicle_desc, function(on_click)
     local closestveh = get_closest_vehicle(players.user_ped())
     local driver = VEHICLE.GET_PED_IN_VEHICLE_SEAT(closestveh, -1)
@@ -3481,6 +3687,26 @@ menu.action(world_root, translations.box_spam, {translations.box_spam_cmd}, tran
     end
 end)
 
+world_root:action(translations.no_russian, {"norussian"}, translations.no_russian_desc, function()
+    notify(translations.remember_no_russian)
+    local terror_model = util.joaat("s_m_y_xmech_02")
+    request_model_load(terror_model)
+    local terrorist = entities.create_ped(28, terror_model, ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(players.user_ped(), 0, 1.0, 0.0), math.random(270))
+    WEAPON.GIVE_WEAPON_TO_PED(terrorist, 171789620, 1000, false, true)
+    PED.SET_PED_COMBAT_ABILITY(terrorist, 2)
+    PED.SET_PED_AS_ENEMY(terrorist, true)
+    PED.SET_PED_COMBAT_ATTRIBUTES(terrorist,13, true)
+    while true do
+        if PED.IS_PED_FATALLY_INJURED(terrorist) or not ENTITY.DOES_ENTITY_EXIST(terrorist) then 
+            break 
+        end
+        local nearest = get_closest_ped_to_ped(ENTITY.GET_ENTITY_COORDS(terrorist), terrorist)
+        TASK.CLEAR_PED_TASKS_IMMEDIATELY(terrorist)
+        TASK.TASK_COMBAT_PED(terrorist, nearest[1])
+        util.yield(5000)
+    end
+end)
+
 
 menu.action(train_root, translations.find_train, {}, "", function()
     for _, veh in pairs(entities.get_all_vehicles_as_pointers()) do 
@@ -3499,6 +3725,7 @@ menu.click_slider(train_root, translations.set_train_speed, {}, "", -300, 300, 1
     for _, veh in pairs(entities.get_all_vehicles_as_pointers()) do 
         if entities.get_model_hash(veh) == util.joaat("freight") then
             train_hdl = entities.pointer_to_handle(veh)
+            request_control_of_entity(train_hdl)
             VEHICLE.SET_TRAIN_SPEED(train_hdl, s)
             VEHICLE.SET_TRAIN_CRUISE_SPEED(train_hdl, s)
             was_any_train_affected = true
@@ -5341,6 +5568,17 @@ menu.toggle(online_root, translations.show_me_whos_using_voicechat, {translation
     show_voicechatters = on
     mod_uses("player", if on then 1 else -1)
 end, false)
+
+online_root:toggle_loop(translations.auto_remove_bounty, {}, "", function()
+    if util.is_session_started() then
+        if memory.read_int(memory.script_global(1835502 + 4 + 1 + (players.user() * 3))) == 1 then
+            memory.write_int(memory.script_global(2815059 + 1856 + 17), -1)
+            memory.write_int(memory.script_global(2359296 + 1 + 5149 + 13), 2880000)
+            notify(translations.removed_bounty ..memory.read_int(memory.script_global(1835502 + 4 + 1 + (players.user() * 3) + 1)).. " ")
+        end
+    end
+    util.yield(5000)
+end)
 
 antioppressor = false
 menu.toggle(protections_root, translations.antioppressor, { translations.antioppressor_cmd},  translations.antioppressor_desc, function(on)
