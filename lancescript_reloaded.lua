@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 9.21
+script_version = 9.22
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -166,15 +166,17 @@ function modern_toast(text)
             if scale_y < min_scale_y then 
                 scale_y = min_scale_y + 0.02
             end
-
-            local min_frames = 10 + (cur_active_modern_toasts * 10)
-            local max_frames = 50 + (10 * string.len(text)) + (cur_active_modern_toasts * 10)
+            
+            local target_y_pos = cur_active_modern_toasts + 0.05
+            local display_time = (0.05 * string.len(text))
+            local start_time = os.clock()
             cur_active_modern_toasts += 1
             while true do 
-                cur_anim_frame += 1
-                if cur_anim_frame < min_frames then 
-                    y_pos += 0.005 
-                elseif cur_anim_frame > max_frames then 
+                if ((os.clock() - start_time) <= display_time) then
+                    if y_pos < target_y_pos then 
+                        y_pos += 0.005 
+                    end
+                else
                     y_pos -= 0.005
                     if y_pos < 0 then
                         cur_active_modern_toasts -= 1 
@@ -692,6 +694,11 @@ local function b64_dec(data)
 end
 
 -- detections
+detection_lance = true
+menu.toggle(detections_root, translations.lance_detection, {translations.lance_detection_cmd}, translations.lance_detection_desc, function(on)
+    detection_lance = on
+end, true)
+
 detection_teleports = false
 menu.toggle(detections_root, translations.teleport_detection, {translations.teleport_detection_cmd}, translations.teleport_detection_desc, function(on)
     detection_teleports = on
@@ -714,20 +721,19 @@ menu.toggle(detections_root, translations.money_detection, {translations.money_d
     detection_money = on
 end, false)
 
-
-detection_lance = true
-menu.toggle(detections_root, translations.lance_detection, {translations.lance_detection_cmd}, translations.lance_detection_desc, function(on)
-    detection_lance = on
-end, true)
-
-menu.toggle_loop(protections_root, translations.admin_bail, {translations.admin_bail_cmd}, translations.admin_bail_desc, function(on)
-    if util.is_session_started() then
-        for _, pid in players.list(false, true, true) do 
-            if players.is_marked_as_admin(pid) then 
-                notify(translations.admin_detected)
-                menu.trigger_commands("quickbail")
-            end    
+local admin_bail = true
+menu.toggle(protections_root, translations.admin_bail, {translations.admin_bail_cmd}, translations.admin_bail_desc, function(on)
+    admin_bail = on
+    while admin_bail do
+        if util.is_session_started() then
+            for _, pid in players.list(false, true, true) do 
+                if players.is_marked_as_admin(pid) then 
+                    notify(translations.admin_detected)
+                    menu.trigger_commands("quickbail")
+                end    
+            end
         end
+        util.yield()
     end
 end, true)
 
@@ -1213,13 +1219,13 @@ menu.toggle(self_root, translations.burning_man, {translations.burning_man_cmd},
     end
 end)
 
-tpf_units = 0.5
+tpf_units = 1
 menu.action(self_root, translations.tp_forward, {translations.tp_forward_cmd}, translations.tp_forward_desc, function(on_click)
     local pos = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(players.user_ped(), 0, tpf_units, 0)
     ENTITY.SET_ENTITY_COORDS_NO_OFFSET(PLAYER.PLAYER_PED_ID(), pos['x'], pos['y'], pos['z'], true, false, false)
 end)
 
-menu.slider(self_root, translations.tp_forward_units, {translations.tp_forward_units_cmd}, translations.tp_forward_units_desc, 5, 100, 1, 1, function(s)
+menu.slider(self_root, translations.tp_forward_units, {translations.tp_forward_units_cmd}, translations.tp_forward_units_desc, 1, 100, 1, 1, function(s)
     tpf_units = s
 end)
 
@@ -1256,10 +1262,6 @@ self_root:toggle_loop(translations.laser_eyes, {"lasereyes"}, translations.laser
         end
         local boneCoord_L = ENTITY.GET_WORLD_POSITION_OF_ENTITY_BONE(players.user_ped(), PED.GET_PED_BONE_INDEX(players.user_ped(), left_eye_id))
         local boneCoord_R = ENTITY.GET_WORLD_POSITION_OF_ENTITY_BONE(players.user_ped(), PED.GET_PED_BONE_INDEX(players.user_ped(), right_eye_id))
-        if ped_model == util.joaat("mp_f_freemode_01") then 
-            boneCoord_L.z += 0.08
-            boneCoord_R.z += 0.08
-        end
         camRot.x += 90
         request_ptfx_asset(dictionary)
         GRAPHICS.USE_PARTICLE_FX_ASSET(dictionary)
@@ -1273,7 +1275,7 @@ end)
 
 local entity_held = 0
 local are_hands_up = false
-self_root:toggle_loop(translations.throw_cars, {"throwcars"}, "", function(on)
+self_root:toggle_loop(translations.throw_cars, {"throwcars"}, translations.throw_cars_desc, function(on)
     if PAD.IS_CONTROL_JUST_RELEASED(38, 38) then
         if entity_held == 0 then
             if not are_hands_up then 
@@ -3675,18 +3677,6 @@ menu.toggle(world_root, translations.angry_planes, {translations.angry_planes_cm
 end)
 
 
-menu.action(world_root, translations.box_spam, {translations.box_spam_cmd}, translations.box_spam_desc, function(on)
-    local mdl = util.joaat("xs_prop_arena_box_test")
-    request_model_load(mdl)
-    local c = players.get_position(players.user())
-    c.z = c.z + 50
-    for i=1, 100 do
-        c.x = c.x + math.random(-200, 200)
-        c.y = c.y + math.random(-200, 200)
-        entities.create_object(mdl, c)
-    end
-end)
-
 world_root:action(translations.no_russian, {"norussian"}, translations.no_russian_desc, function()
     notify(translations.remember_no_russian)
     local terror_model = util.joaat("s_m_y_xmech_02")
@@ -5100,8 +5090,9 @@ local function set_up_player_actions(pid)
         request_model_load(hash)
         local cage = entities.create_vehicle(hash, coords, 0)
         ENTITY.SET_ENTITY_ROTATION(cage, 90, 0, 0, 0)
-        ENTITY.FREEZE_ENTITY_POSITION(cage, true)
+        --ENTITY.FREEZE_ENTITY_POSITION(cage, true)
         ENTITY.SET_ENTITY_INVINCIBLE(cage, true)
+        ENTITY.APPLY_FORCE_TO_ENTITY(cage, 1, 0.0, 0.0, 25.0, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
     end)
 
     menu.action(ls_hostile, translations.spawn_arena, {translations.spawn_arena_cmd}, translations.spawn_arena_desc, function(click_type)
@@ -5563,11 +5554,17 @@ menu.list_action(apgiveveh_root, translations.give_vehicle, {translations.give_a
     end
 end)
 
-show_voicechatters = false
-menu.toggle(online_root, translations.show_me_whos_using_voicechat, {translations.show_me_whos_using_voicechat_cmd}, translations.show_me_whos_using_voicechat_desc, function(on)
-    show_voicechatters = on
-    mod_uses("player", if on then 1 else -1)
-end, false)
+local show_voicechatters = true
+online_root:toggle(translations.show_me_whos_using_voicechat, {translations.show_me_whos_using_voicechat_cmd}, translations.show_me_whos_using_voicechat_desc, function(on) 
+    while show_voicechatters do
+        for _, pid in pairs(players.list(true, true, true)) do
+            if NETWORK.NETWORK_IS_PLAYER_TALKING(pid) then
+                util.draw_debug_text(PLAYER.GET_PLAYER_NAME(pid) .. " is talking")
+            end
+        end
+        util.yield()
+    end
+end, true)
 
 online_root:toggle_loop(translations.auto_remove_bounty, {}, "", function()
     if util.is_session_started() then
@@ -5766,7 +5763,7 @@ local known_players_this_game_session = {}
 players.on_join(function(pid)
     set_up_player_actions(pid)
 
-    if pid ~= players.user() then
+    if players.user() ~= pid then
         -- detections
         if players.get_name(pid) == "UndiscoveredPlayer" then 
             util.yield()
@@ -5774,8 +5771,10 @@ players.on_join(function(pid)
 
         start_teleport_detection_thread(pid)
 
+        -- hiii 2take1 people! if you're looking for an RID, you can surely look in the old commits; but thats my old account!
+        -- no more creepy tracking 4 u! go outside :))
         if detection_lance then
-            if players.get_rockstar_id(pid) == 212591971 then
+            if players.get_kd(pid) == 11892 then
                 notify(translations.detection_notice_prefix .. players.get_name(pid) .. translations.lance_detection_notify)
             end
         end
@@ -5979,13 +5978,6 @@ players_thread = util.create_thread(function (thr)
                             util.remove_blip(blip)
                             broke_blips[pid] = nil
                         end
-                    end
-                end
-
-                if show_voicechatters then
-                    ls_log("show voicechatters")
-                    if NETWORK.NETWORK_IS_PLAYER_TALKING(pid) then
-                        util.draw_debug_text(PLAYER.GET_PLAYER_NAME(pid) .. " is talking")
                     end
                 end
             end
