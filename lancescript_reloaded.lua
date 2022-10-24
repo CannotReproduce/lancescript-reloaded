@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 9.22
+script_version = 9.23
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -144,55 +144,54 @@ function get_user_primary_color()
 end
 
 current_toasts = {}
-cur_active_modern_toasts = 0
-function modern_toast(text)
-    if current_toasts[text] == nil then 
-        current_toasts[text] = text
-        if notify_sounds then
-            AUDIO.PLAY_SOUND(-1, "OPEN_WINDOW", "LESTER1A_SOUNDS", 0, 0, 1)
-        end
-        util.create_thread(function()
-            local cur_anim_frame = 0
-            local y_pos = 0
-            local text_scale = 0.5
-            local scale_x, scale_y = directx.get_text_size(text, text_scale)
-            local min_scale_x, min_scale_y = directx.get_text_size(translations.script_name_pretty, 0.6)
-            scale_x += 0.05
-            scale_y += 0.02
-            if scale_x < min_scale_x then 
-                scale_x = min_scale_x + 0.05
-            end
 
-            if scale_y < min_scale_y then 
-                scale_y = min_scale_y + 0.02
-            end
-            
-            local target_y_pos = cur_active_modern_toasts + 0.05
-            local display_time = (0.05 * string.len(text))
-            local start_time = os.clock()
-            cur_active_modern_toasts += 1
-            while true do 
-                if ((os.clock() - start_time) <= display_time) then
-                    if y_pos < target_y_pos then 
-                        y_pos += 0.005 
-                    end
-                else
-                    y_pos -= 0.005
-                    if y_pos < 0 then
-                        cur_active_modern_toasts -= 1 
-                        current_toasts[text] = nil 
-                        util.stop_thread()
-                    end
-                end
-                directx.draw_rect(0.5 - (scale_x / 2), y_pos, scale_x, scale_y, {r=0, g=0, b=0, a=0.7})
-                directx.draw_rect(0.5 - (scale_x / 2), y_pos - (scale_y/2), scale_x, 0.025, {r = 0, g = 0, b = 0, a = 1})
-                directx.draw_text(0.5, y_pos + (scale_y / 2), text, 5, text_scale, {r=1, g=1, b=1, a=1}, false)
-                directx.draw_text(0.5, y_pos - (scale_y / 2), translations.script_name_pretty, 1, 0.6, {r=1, g=1, b=1, a=1}, false)
-                util.yield()
-            end
-        end)
+local function modern_toast(text)
+    for _, t in pairs(current_toasts) do 
+        if t.text == text then 
+            return 
+        end 
     end
+    if notify_sounds then
+        AUDIO.PLAY_SOUND(-1, "OPEN_WINDOW", "LESTER1A_SOUNDS", 0, 0, 1)
+    end
+    table.insert(current_toasts, 
+    {
+        text = text, 
+        start_time = os.clock(),
+        display_time = (0.15 * string.len(text))
+    })
 end
+
+-- toast renderer
+util.create_tick_handler(function()
+    local current_y_pos = 0.00
+    local text_scale = 0.6
+    for index, toast in pairs(current_toasts) do
+        -- if a notif has expired, delete it
+        if current_y_pos == 0.00 then 
+            current_y_pos = 0.04 
+        else
+            current_y_pos += 0.07
+        end
+        if ((os.clock() - toast.start_time) >= toast.display_time) then
+            table.remove(current_toasts, index)
+            return
+        end
+
+        local scale_x, scale_y = directx.get_text_size(toast.text, text_scale)
+        local min_scale_x, min_scale_y = directx.get_text_size(translations.script_name_pretty, 0.6)
+
+        scale_x += 0.05
+        scale_y += 0.02
+
+        directx.draw_rect(0.5 - (scale_x / 2), current_y_pos, scale_x, scale_y, {r=0, g=0, b=0, a=0.7})
+        directx.draw_rect(0.5 - (scale_x / 2), current_y_pos - (scale_y/2), scale_x, 0.025, {r = 0, g = 0, b = 0, a = 1})
+        directx.draw_text(0.5, current_y_pos + (scale_y / 2), toast.text, 5, text_scale, {r=1, g=1, b=1, a=1}, false)
+        directx.draw_text(0.5, current_y_pos - (scale_y / 2), translations.script_name_pretty, 1, 0.6, {r=1, g=1, b=1, a=1}, false)
+    end
+    current_y_pos = 0.00
+end)
+
 
 function notify(text)
     pluto_switch notify_mode do
@@ -6053,9 +6052,7 @@ menu.action(god_graphics_root, translations.unapply_god_graphics, {}, "", functi
 end)
 
 menu.action(lancescript_root, translations.test_notification, {"testnotify"}, "", function(on_click)
-    menu.show_command_box("testnotify ")
-end, function(input)
-    notify(input)
+    notify(random_string(10))
 end)
 
 menu.toggle(lancescript_root, translations.disable_notification_system, {}, translations.disable_notification_system_desc, function(on)
