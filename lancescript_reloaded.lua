@@ -1,11 +1,11 @@
 -- LANCESCRIPT RELOADED1
-script_version = 9.23
+script_version = 9.24
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
 all_labels = gta_labels.all_labels
 sexts = gta_labels.sexts
-ocoded_for = 1.61
+ocoded_for = 1.63
 is_loading = true
 ls_debug = false
 all_vehicles = {}
@@ -1626,7 +1626,7 @@ local ls_vehiclefly = menu.toggle_loop(my_vehicle_movement_root, translations.ve
         ENTITY.SET_ENTITY_MAX_SPEED(player_cur_car, vflyspeed)
         local c = CAM.GET_GAMEPLAY_CAM_ROT(0)
         CAM.DISABLE_CINEMATIC_BONNET_CAMERA_THIS_UPDATE()
-        ENTITY.SET_ENTITY_ROTATION(player_cur_car, c.x, c.y, c.z, 0, true)
+        ENTITY.SET_ENTITY_ROTATION(player_cur_car, c.x, 0, c.z, 0, true)
         any_c_pressed = false
         --W
         local x_vel = 0.0
@@ -5091,7 +5091,7 @@ local function set_up_player_actions(pid)
         ENTITY.SET_ENTITY_ROTATION(cage, 90, 0, 0, 0)
         --ENTITY.FREEZE_ENTITY_POSITION(cage, true)
         ENTITY.SET_ENTITY_INVINCIBLE(cage, true)
-        ENTITY.APPLY_FORCE_TO_ENTITY(cage, 1, 0.0, 0.0, 25.0, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
+        ENTITY.FREEZE_ENTITY_POSITION(cage, true)
     end)
 
     menu.action(ls_hostile, translations.spawn_arena, {translations.spawn_arena_cmd}, translations.spawn_arena_desc, function(click_type)
