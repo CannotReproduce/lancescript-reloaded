@@ -1,5 +1,5 @@
 -- LANCESCRIPT RELOADED1
-script_version = 9.24
+script_version = 9.25
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -1821,13 +1821,13 @@ end)
 
 function get_vehicle_handling_value(veh, offset)
     local v_ptr = entities.handle_to_pointer(veh)
-    local handling = memory.read_long(v_ptr + 0x938)
+    local handling = memory.read_long(v_ptr + 0x918)
     return memory.read_float(handling + offset)
 end
 
 function set_vehicle_handling_value(veh, offset, value)
     local v_ptr = entities.handle_to_pointer(veh)
-    local handling = memory.read_long(v_ptr + 0x938)
+    local handling = memory.read_long(v_ptr + 0x918)
     memory.write_float(handling + offset, value)
 end
 
@@ -1882,7 +1882,7 @@ function set_vehicle_into_drift_mode(veh)
 end
 
 initial_d_mode = false
-initial_d_score = true
+initial_d_score = false
 function on_user_change_vehicle(vehicle)
     if vehicle ~= 0 then
         if initial_d_mode then 
@@ -1963,7 +1963,7 @@ end)
 
  menu.toggle(my_vehicle_movement_root, translations.initial_d_score, {}, "", function(on, click_type)
     initial_d_score = on
-end, true)
+end)
 
 menu.toggle_loop(my_vehicle_movement_root, translations.horn_boost, {translations.horn_boost_cmd}, translations.horn_boost_desc, function(on)
     if player_cur_car ~= 0 then
