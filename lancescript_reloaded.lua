@@ -1,5 +1,5 @@
--- LANCESCRIPT RELOADED1
-script_version = 9.25
+-- LANCESCRIPT RELOADED
+script_version = 9.26
 all_used_cameras = {}
 util.require_natives("1663599433")
 gta_labels = require('all_labels')
@@ -1993,7 +1993,7 @@ function get_player_info()
 end
 
 function get_weapon_base()
-    return memory.read_long(get_player_ptr() + 0x10D8)
+    return memory.read_long(get_player_ptr() + 0x10B8)
 end
 
 function get_gun_ptr()
