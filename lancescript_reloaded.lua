@@ -5806,8 +5806,8 @@ players.dispatch_on_join()
 
 players.on_leave(function(pid)
     if broke_blips[pid] ~= nil then
-        broke_blips[pid] = nil
         util.remove_blip(broke_blips[pid])
+	broke_blips[pid] = nil
     end
 end)
 
